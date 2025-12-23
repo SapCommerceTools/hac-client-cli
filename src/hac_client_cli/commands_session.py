@@ -69,8 +69,12 @@ def start_session(
             username = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_USERNAME")
         
         if not username:
-            # Interactive prompt
-            username = typer.prompt("Username")
+            print("ERROR: Username not provided", file=sys.stderr)
+            print("\nProvide username via:", file=sys.stderr)
+            print(f"  --username <user>", file=sys.stderr)
+            print(f"  HAC_USERNAME environment variable", file=sys.stderr)
+            print(f"  HAC_USERNAME_{env_name.upper()}_{endpoint_name.upper()} environment variable", file=sys.stderr)
+            raise typer.Exit(1)
         
         # Get password from various sources
         if not password:
@@ -85,9 +89,12 @@ def start_session(
                 password = sys.stdin.read().strip()
         
         if not password:
-            # Interactive prompt (use getpass for better security)
-            import getpass
-            password = getpass.getpass("Password: ")
+            print("ERROR: Password not provided", file=sys.stderr)
+            print("\nProvide password via:", file=sys.stderr)
+            print(f"  HAC_PASSWORD environment variable", file=sys.stderr)
+            print(f"  HAC_PASSWORD_{env_name.upper()}_{endpoint_name.upper()} environment variable", file=sys.stderr)
+            print(f"  stdin: echo 'password' | hac session start {env_name} --endpoint {endpoint_name} --username {username}", file=sys.stderr)
+            raise typer.Exit(1)
         
         try:
             # Create client and authenticate

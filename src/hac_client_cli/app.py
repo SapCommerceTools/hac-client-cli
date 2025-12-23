@@ -188,51 +188,200 @@ def impex_command(
 
 @app.command("config")
 def config_command(
-    list_environments: bool = typer.Option(False, "--list-environments", "-l", help="List configured environments"),
+    list_environments: bool = typer.Option(False, "--list", "-l", help="List configured environments"),
+    validate: bool = typer.Option(False, "--validate", "-v", help="Validate configuration"),
+    show_path: bool = typer.Option(False, "--path", "-p", help="Show config file path"),
+    show_example: bool = typer.Option(False, "--example", "-x", help="Show example configuration"),
+    environment: Optional[str] = typer.Option(None, "--env", "-e", help="Show specific environment"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
-    """Show HAC client configuration."""
+    """Discover, inspect, and manage HAC client configuration.
+    
+    Examples:
+        hac config                  # Show all configuration
+        hac config -l               # List environments
+        hac config -e local         # Show specific environment
+        hac config -v               # Validate configuration
+        hac config -p               # Show config file path
+        hac config -x               # Show example config
+    """
+    from hac_client_cli.config_loader import get_config_path
+    
+    config_path = get_config_path()
+    
+    # Show path only
+    if show_path:
+        if json_output:
+            print(json.dumps({"config_path": str(config_path), "exists": config_path.exists()}, indent=2))
+        else:
+            print(f"Configuration file: {config_path}")
+            print(f"Status: {'exists' if config_path.exists() else 'not found'}")
+        return
+    
+    # Show example
+    if show_example:
+        print("""# HAC Client Configuration
+# Save to: ~/.config/hac-client/config.toml
+# Or set: export HAC_CLIENT_CONFIG_PATH=/path/to/config.toml
+
+# Default environment to use
+default_environment = "local"
+
+# Environment definitions
+[environments.local]
+url = "https://localhost:9002"
+username = "admin"
+# password = "nimda"  # Or use HAC_PASSWORD env var
+ignore_ssl = true
+timeout = 30
+
+[environments.dev]
+url = "https://dev.example.com"
+username = "admin"
+# Password from HAC_PASSWORD_DEV or HAC_PASSWORD env var
+ignore_ssl = false
+timeout = 60
+
+[environments.prod]
+url = "https://prod.example.com"
+username = "admin"
+# ALWAYS use env var for prod: HAC_PASSWORD_PROD
+ignore_ssl = false
+timeout = 120
+""")
+        return
+    
+    # Load and validate config
     try:
         config = load_config()
         
+        # Validate mode
+        if validate:
+            issues = []
+            
+            # Check if config file exists
+            if not config_path.exists():
+                issues.append("Configuration file does not exist")
+            
+            # Check if we have environments
+            if not config.environments:
+                issues.append("No environments configured")
+            
+            # Check default environment exists
+            if config.default_environment not in config.environments:
+                issues.append(f"Default environment '{config.default_environment}' not found in configured environments")
+            
+            # Check each environment
+            for name, env in config.environments.items():
+                if not env.password:
+                    issues.append(f"Environment '{name}': password not configured (set in config or HAC_PASSWORD_{name.upper()} env var)")
+                if not env.url.startswith('http'):
+                    issues.append(f"Environment '{name}': URL should start with http:// or https://")
+            
+            if json_output:
+                print(json.dumps({"valid": len(issues) == 0, "issues": issues}, indent=2))
+            else:
+                if issues:
+                    print("❌ Configuration has issues:\n")
+                    for issue in issues:
+                        print(f"  - {issue}")
+                    print(f"\nConfiguration file: {config_path}")
+                    print("Run 'hac config --example' to see example configuration")
+                    raise typer.Exit(1)
+                else:
+                    print("✅ Configuration is valid")
+                    print(f"  - {len(config.environments)} environment(s) configured")
+                    print(f"  - Default: {config.default_environment}")
+            return
+        
+        # Show specific environment
+        if environment:
+            if environment not in config.environments:
+                print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
+                print("\nAvailable environments:", file=sys.stderr)
+                for env_name in config.environments:
+                    marker = " (default)" if env_name == config.default_environment else ""
+                    print(f"  - {env_name}{marker}", file=sys.stderr)
+                raise typer.Exit(1)
+            
+            env = config.environments[environment]
+            if json_output:
+                output = {
+                    "name": environment,
+                    "url": env.url,
+                    "username": env.username,
+                    "password_configured": env.password is not None,
+                    "ignore_ssl": env.ignore_ssl,
+                    "timeout": env.timeout,
+                    "is_default": environment == config.default_environment
+                }
+                print(json.dumps(output, indent=2))
+            else:
+                marker = " (default)" if environment == config.default_environment else ""
+                print(f"Environment: {environment}{marker}")
+                print(f"  URL: {env.url}")
+                print(f"  Username: {env.username}")
+                print(f"  Password: {'✓ configured' if env.password else '✗ NOT configured'}")
+                print(f"  Ignore SSL: {env.ignore_ssl}")
+                print(f"  Timeout: {env.timeout}s")
+            return
+        
+        # List environments
         if list_environments:
             if json_output:
                 envs = list(config.environments.keys())
                 print(json.dumps({"environments": envs, "default": config.default_environment}, indent=2))
             else:
                 print("Configured environments:")
-                for env_name in config.environments:
+                for env_name in sorted(config.environments.keys()):
                     marker = " (default)" if env_name == config.default_environment else ""
                     print(f"  - {env_name}{marker}")
-        else:
-            # Show full config (without passwords)
-            if json_output:
-                output = {
-                    "default_environment": config.default_environment,
-                    "environments": {
-                        name: {
-                            "url": env.url,
-                            "username": env.username,
-                            "password_configured": env.password is not None,
-                            "ignore_ssl": env.ignore_ssl,
-                            "timeout": env.timeout
-                        }
-                        for name, env in config.environments.items()
+            return
+        
+        # Show full config (default)
+        if json_output:
+            output = {
+                "config_path": str(config_path),
+                "default_environment": config.default_environment,
+                "environments": {
+                    name: {
+                        "url": env.url,
+                        "username": env.username,
+                        "password_configured": env.password is not None,
+                        "ignore_ssl": env.ignore_ssl,
+                        "timeout": env.timeout
                     }
+                    for name, env in config.environments.items()
                 }
-                print(json.dumps(output, indent=2))
-            else:
-                from hac_client_cli.config_loader import get_config_path
-                print(f"Configuration file: {get_config_path()}")
-                print(f"Default environment: {config.default_environment}")
-                print("\nEnvironments:")
-                for name, env in config.environments.items():
-                    print(f"\n  [{name}]")
-                    print(f"    URL: {env.url}")
-                    print(f"    Username: {env.username}")
-                    print(f"    Password: {'configured' if env.password else 'NOT configured'}")
-                    print(f"    Ignore SSL: {env.ignore_ssl}")
-                    print(f"    Timeout: {env.timeout}s")
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            print(f"Configuration file: {config_path}")
+            print(f"Status: {'✓ exists' if config_path.exists() else '✗ not found (using defaults)'}")
+            print(f"\nDefault environment: {config.default_environment}")
+            print(f"\nEnvironments ({len(config.environments)}):")
+            for name in sorted(config.environments.keys()):
+                env = config.environments[name]
+                marker = " ← default" if name == config.default_environment else ""
+                pwd_status = "✓" if env.password else "✗"
+                print(f"  {name}{marker}")
+                print(f"    URL: {env.url}")
+                print(f"    Username: {env.username}")
+                print(f"    Password: {pwd_status}")
+                print(f"    SSL: {'ignore' if env.ignore_ssl else 'verify'}")
+            
+            print("\nCommands:")
+            print("  hac config -l          # List environments")
+            print("  hac config -e local    # Show environment details")
+            print("  hac config -v          # Validate configuration")
+            print("  hac config -x          # Show example config")
+    
+    except ValueError as e:
+        print(f"ERROR: Configuration validation failed", file=sys.stderr)
+        print(f"  {e}", file=sys.stderr)
+        print(f"\nConfiguration file: {config_path}", file=sys.stderr)
+        print("\nRun 'hac config --example' to see correct format", file=sys.stderr)
+        raise typer.Exit(1)
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         raise typer.Exit(1)

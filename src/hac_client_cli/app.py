@@ -59,9 +59,12 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
     all_sessions = session_manager.list_sessions()
     
     # Find a session for this endpoint
+    # Normalize URLs for comparison (remove trailing slashes)
+    config_url_normalized = ep_config.url.rstrip('/')
     session = None
     for s in all_sessions:
-        if s.environment == session_id and s.base_url == ep_config.url:
+        session_url_normalized = s.base_url.rstrip('/')
+        if s.environment == session_id and session_url_normalized == config_url_normalized:
             session = s
             break
     

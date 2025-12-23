@@ -2,6 +2,16 @@
 
 Thin command-line interface for SAP Commerce HAC (Hybris Administration Console) operations.
 
+## Security
+
+This CLI implements secure credential handling:
+
+- **No Password Storage**: Passwords are NEVER stored in configuration files or on disk
+- **Explicit Sessions**: Authentication requires explicit `hac session start` command
+- **Memory Clearing**: Passwords are cleared from memory immediately after use
+- **Secure Input**: Passwords via environment variables, stdin, or interactive prompt (not command-line args)
+- **Token Import**: Support for importing existing sessions for automation/CI scenarios
+
 ## Overview
 
 This CLI provides basic HAC operations:

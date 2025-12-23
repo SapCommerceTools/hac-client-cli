@@ -66,27 +66,35 @@ def start_session(
                 password = sys.stdin.read().strip()
         
         if not password:
-            # Interactive prompt
-            password = typer.prompt("Password", hide_input=True)
+            # Interactive prompt (use getpass for better security)
+            import getpass
+            password = getpass.getpass("Password: ")
         
-        # Create client and authenticate
-        auth = BasicAuthHandler(env.username, password)
-        client = HacClient(
-            base_url=env.url,
-            auth_handler=auth,
-            environment=environment,
-            timeout=env.timeout,
-            ignore_ssl=env.ignore_ssl,
-            session_persistence=True,
-            quiet=False
-        )
+        try:
+            # Create client and authenticate
+            auth = BasicAuthHandler(env.username, password)
+            client = HacClient(
+                base_url=env.url,
+                auth_handler=auth,
+                environment=environment,
+                timeout=env.timeout,
+                ignore_ssl=env.ignore_ssl,
+                session_persistence=True,
+                quiet=False
+            )
+            
+            # Force login to create session
+            client.login()
+            
+            print(f"✓ Session started for environment '{environment}'")
+            print(f"  User: {env.username}")
+            print(f"  URL: {env.url}")
         
-        # Force login to create session
-        client.login()
-        
-        print(f"✓ Session started for environment '{environment}'")
-        print(f"  User: {env.username}")
-        print(f"  URL: {env.url}")
+        finally:
+            # Clear password from memory immediately
+            if password:
+                password = None
+                del password
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

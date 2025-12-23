@@ -46,15 +46,16 @@ def list_environments(
                 print("  hac env add local")
                 print("  hac endpoint add local hac --url https://localhost:9002 --username admin")
             else:
-                print(f"Environments ({len(environments)}):\n")
+                # Tabular format
+                print(f"{'NAME':<20} {'ENDPOINTS':<12} {'DEFAULT-ENDPOINT':<20} {'DEFAULT':<8}")
+                print("-" * 62)
+                
                 for env in environments:
-                    marker = " ← default" if env.name == default else ""
-                    endpoint_count = len(env.endpoints)
-                    print(f"  {env.name}{marker}")
-                    print(f"    Endpoints: {endpoint_count}")
-                    if env.default_endpoint:
-                        print(f"    Default: {env.default_endpoint}")
-                    print()
+                    default_marker = "*" if env.name == default else ""
+                    endpoint_count = str(len(env.endpoints))
+                    default_ep = env.default_endpoint or "-"
+                    
+                    print(f"{env.name:<20} {endpoint_count:<12} {default_ep:<20} {default_marker:<8}")
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

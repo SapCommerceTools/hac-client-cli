@@ -11,7 +11,9 @@ import typer
 from pathlib import Path
 from typing import Optional
 
-from hac_client_cli.config_loader import load_config, get_environment_config
+from hac_client_cli.environment_manager import EnvironmentManager
+from hac_client_cli.commands_env import env_app
+from hac_client_cli.commands_session import session_app
 from hac_client_core.client import HacClient, HacClientError
 from hac_client_core.auth import BasicAuthHandler
 
@@ -20,6 +22,10 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False
 )
+
+# Add environment and session management
+app.add_typer(env_app, name="env")
+app.add_typer(session_app, name="session")
 
 
 def create_client(environment: Optional[str] = None, quiet: bool = False) -> HacClient:
@@ -32,20 +38,35 @@ def create_client(environment: Optional[str] = None, quiet: bool = False) -> Hac
     Returns:
         Configured HacClient instance
     """
-    env_config = get_environment_config(environment)
+    manager = EnvironmentManager()
     
-    if not env_config.password:
-        print("ERROR: Password not configured. Set in config file or HAC_PASSWORD env var.", file=sys.stderr)
+    # Get environment name
+    env_name = environment or manager.get_default_environment()
+    if not env_name:
+        print("ERROR: No default environment set", file=sys.stderr)
+        print("Add an environment: hac env add <name> --url <url> --username <user>", file=sys.stderr)
         raise typer.Exit(1)
     
-    auth = BasicAuthHandler(env_config.username, env_config.password)
+    # Get environment config
+    env = manager.get_environment(env_name)
+    if not env:
+        print(f"ERROR: Environment '{env_name}' not found", file=sys.stderr)
+        print("List environments: hac env list", file=sys.stderr)
+        raise typer.Exit(1)
+    
+    if not env.password:
+        print(f"ERROR: Password not configured for environment '{env_name}'", file=sys.stderr)
+        print(f"Set via config or HAC_PASSWORD_{env_name.upper()} env var", file=sys.stderr)
+        raise typer.Exit(1)
+    
+    auth = BasicAuthHandler(env.username, env.password)
     
     return HacClient(
-        base_url=env_config.url,
+        base_url=env.url,
         auth_handler=auth,
-        environment=environment or "default",
-        timeout=env_config.timeout,
-        ignore_ssl=env_config.ignore_ssl,
+        environment=env_name,
+        timeout=env.timeout,
+        ignore_ssl=env.ignore_ssl,
         session_persistence=True,
         quiet=quiet
     )

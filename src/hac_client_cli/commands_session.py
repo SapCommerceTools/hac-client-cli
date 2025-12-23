@@ -29,36 +29,38 @@ def format_duration(seconds: float) -> str:
 @session_app.command("start")
 def start_session(
     environment: str = typer.Argument(..., help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name (uses default if not specified)"),
     password: Optional[str] = typer.Option(None, "--password", "-p", help="Password (or use stdin/env var)")
 ):
     """Start a new HAC session (authenticate and create session).
     
     Password can be provided via:
     - Command option: --password <pass> (not recommended)
-    - Environment variable: HAC_PASSWORD or HAC_PASSWORD_<ENV>
+    - Environment variable: HAC_PASSWORD or HAC_PASSWORD_<ENV>_<ENDPOINT>
     - Standard input: echo 'password' | hac session start <env>
     - Interactive prompt: if none of the above
     
     Examples:
         hac session start local
+        hac session start local --endpoint hac
         HAC_PASSWORD=secret hac session start local
-        echo 'secret' | hac session start local
+        echo 'secret' | hac session start local --endpoint hac
     """
     try:
-        from hac_client_cli.environment_manager import EnvironmentManager
+        from hac_client_cli.config_loader import get_endpoint_config
         
-        env_manager = EnvironmentManager()
-        env = env_manager.get_environment(environment)
+        # Get endpoint configuration
+        env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
         
-        if not env:
-            print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
-            raise typer.Exit(1)
+        # Create session identifier
+        session_id = f"{env_name}/{endpoint_name}"
         
         # Get password from various sources
         if not password:
-            # Try environment variable
-            env_var_name = f"HAC_PASSWORD_{environment.upper()}"
-            password = os.environ.get(env_var_name) or os.environ.get("HAC_PASSWORD")
+            # Try environment variable (specific to env/endpoint, then env, then generic)
+            env_ep_var = f"HAC_PASSWORD_{env_name.upper()}_{endpoint_name.upper()}"
+            env_var = f"HAC_PASSWORD_{env_name.upper()}"
+            password = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_PASSWORD")
         
         if not password:
             # Try stdin (non-interactive)
@@ -72,13 +74,13 @@ def start_session(
         
         try:
             # Create client and authenticate
-            auth = BasicAuthHandler(env.username, password)
+            auth = BasicAuthHandler(ep_config.username, password)
             client = HacClient(
-                base_url=env.url,
+                base_url=ep_config.url,
                 auth_handler=auth,
-                environment=environment,
-                timeout=env.timeout,
-                ignore_ssl=env.ignore_ssl,
+                environment=session_id,  # Use composite key
+                timeout=ep_config.timeout,
+                ignore_ssl=ep_config.ignore_ssl,
                 session_persistence=True,
                 quiet=False
             )
@@ -86,9 +88,9 @@ def start_session(
             # Force login to create session
             client.login()
             
-            print(f"✓ Session started for environment '{environment}'")
-            print(f"  User: {env.username}")
-            print(f"  URL: {env.url}")
+            print(f"✓ Session started for '{session_id}'")
+            print(f"  User: {ep_config.username}")
+            print(f"  URL: {ep_config.url}")
         
         finally:
             # Clear password from memory immediately
@@ -104,6 +106,7 @@ def start_session(
 @session_app.command("import")
 def import_session(
     environment: str = typer.Argument(..., help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name (uses default if not specified)"),
     session_id: Optional[str] = typer.Option(None, "--session-id", help="Session ID (JSESSIONID)"),
     csrf_token: Optional[str] = typer.Option(None, "--csrf-token", help="CSRF token"),
     route_cookie: Optional[str] = typer.Option(None, "--route-cookie", help="ROUTE cookie (optional)")
@@ -113,9 +116,9 @@ def import_session(
     Tokens can be provided via:
     - Command options (not recommended for security)
     - Environment variables:
-      - HAC_SESSION_ID or HAC_SESSION_ID_<ENV>
-      - HAC_CSRF_TOKEN or HAC_CSRF_TOKEN_<ENV>
-      - HAC_ROUTE_COOKIE or HAC_ROUTE_COOKIE_<ENV>
+      - HAC_SESSION_ID or HAC_SESSION_ID_<ENV>_<ENDPOINT>
+      - HAC_CSRF_TOKEN or HAC_CSRF_TOKEN_<ENV>_<ENDPOINT>
+      - HAC_ROUTE_COOKIE or HAC_ROUTE_COOKIE_<ENV>_<ENDPOINT>
     - Standard input (JSON format)
     
     Examples:
@@ -123,28 +126,28 @@ def import_session(
         HAC_SESSION_ID=abc123 HAC_CSRF_TOKEN=def456 hac session import local
         
         # Via stdin (JSON)
-        echo '{"session_id":"abc","csrf_token":"def"}' | hac session import local
+        echo '{"session_id":"abc","csrf_token":"def"}' | hac session import local --endpoint hac
         
         # Via command options
-        hac session import local --session-id abc123 --csrf-token def456
+        hac session import local --endpoint hac --session-id abc123 --csrf-token def456
     """
     try:
-        from hac_client_cli.environment_manager import EnvironmentManager
+        from hac_client_cli.config_loader import get_endpoint_config
         
-        env_manager = EnvironmentManager()
-        env = env_manager.get_environment(environment)
+        # Get endpoint configuration
+        env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
         
-        if not env:
-            print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
-            raise typer.Exit(1)
+        # Create session identifier
+        sess_id = f"{env_name}/{endpoint_name}"
         
         # Get tokens from various sources
         if not session_id or not csrf_token:
             # Try environment variables
-            env_prefix = environment.upper()
-            session_id = session_id or os.environ.get(f"HAC_SESSION_ID_{env_prefix}") or os.environ.get("HAC_SESSION_ID")
-            csrf_token = csrf_token or os.environ.get(f"HAC_CSRF_TOKEN_{env_prefix}") or os.environ.get("HAC_CSRF_TOKEN")
-            route_cookie = route_cookie or os.environ.get(f"HAC_ROUTE_COOKIE_{env_prefix}") or os.environ.get("HAC_ROUTE_COOKIE")
+            env_ep_prefix = f"{env_name.upper()}_{endpoint_name.upper()}"
+            env_prefix = env_name.upper()
+            session_id = session_id or os.environ.get(f"HAC_SESSION_ID_{env_ep_prefix}") or os.environ.get(f"HAC_SESSION_ID_{env_prefix}") or os.environ.get("HAC_SESSION_ID")
+            csrf_token = csrf_token or os.environ.get(f"HAC_CSRF_TOKEN_{env_ep_prefix}") or os.environ.get(f"HAC_CSRF_TOKEN_{env_prefix}") or os.environ.get("HAC_CSRF_TOKEN")
+            route_cookie = route_cookie or os.environ.get(f"HAC_ROUTE_COOKIE_{env_ep_prefix}") or os.environ.get(f"HAC_ROUTE_COOKIE_{env_prefix}") or os.environ.get("HAC_ROUTE_COOKIE")
         
         if not session_id or not csrf_token:
             # Try stdin (JSON)
@@ -168,17 +171,17 @@ def import_session(
         # Import session
         session_manager = SessionManager()
         session_manager.save_session(
-            base_url=env.url,
-            username=env.username,
-            environment=environment,
+            base_url=ep_config.url,
+            username=ep_config.username,
+            environment=sess_id,  # Use composite key
             session_id=session_id,
             csrf_token=csrf_token,
             route_cookie=route_cookie
         )
         
-        print(f"✓ Session imported for environment '{environment}'")
-        print(f"  User: {env.username}")
-        print(f"  URL: {env.url}")
+        print(f"✓ Session imported for '{sess_id}'")
+        print(f"  User: {ep_config.username}")
+        print(f"  URL: {ep_config.url}")
         print(f"  Session ID: {session_id[:16]}...")
     
     except Exception as e:

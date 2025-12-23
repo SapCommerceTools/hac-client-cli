@@ -24,10 +24,16 @@ def list_environments(
             output = [
                 {
                     "name": env.name,
-                    "url": env.url,
-                    "username": env.username,
-                    "ignore_ssl": env.ignore_ssl,
-                    "timeout": env.timeout,
+                    "endpoints": {
+                        ep_name: {
+                            "url": ep.url,
+                            "username": ep.username,
+                            "ignore_ssl": ep.ignore_ssl,
+                            "timeout": ep.timeout
+                        }
+                        for ep_name, ep in env.endpoints.items()
+                    },
+                    "default_endpoint": env.default_endpoint,
                     "is_default": env.name == default
                 }
                 for env in environments
@@ -36,17 +42,18 @@ def list_environments(
         else:
             if not environments:
                 print("No environments configured")
-                print("\nAdd an environment:")
-                print("  hac env add local --url https://localhost:9002 --username admin")
+                print("\nAdd an environment with endpoints:")
+                print("  hac env add local")
+                print("  hac endpoint add local hac --url https://localhost:9002 --username admin")
             else:
                 print(f"Environments ({len(environments)}):\n")
                 for env in environments:
                     marker = " ← default" if env.name == default else ""
-                    ssl_marker = "ignore" if env.ignore_ssl else "verify"
+                    endpoint_count = len(env.endpoints)
                     print(f"  {env.name}{marker}")
-                    print(f"    URL: {env.url}")
-                    print(f"    User: {env.username}")
-                    print(f"    SSL: {ssl_marker}  Timeout: {env.timeout}s")
+                    print(f"    Endpoints: {endpoint_count}")
+                    if env.default_endpoint:
+                        print(f"    Default: {env.default_endpoint}")
                     print()
     
     except Exception as e:
@@ -59,7 +66,7 @@ def show_environment(
     name: str = typer.Argument(..., help="Environment name"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
-    """Show details of a specific environment."""
+    """Show details of a specific environment with all endpoints."""
     try:
         manager = EnvironmentManager()
         env = manager.get_environment(name)
@@ -73,21 +80,43 @@ def show_environment(
         if json_output:
             output = {
                 "name": env.name,
-                "url": env.url,
-                "username": env.username,
-                "ignore_ssl": env.ignore_ssl,
-                "timeout": env.timeout,
+                "endpoints": {
+                    ep_name: {
+                        "url": ep.url,
+                        "username": ep.username,
+                        "ignore_ssl": ep.ignore_ssl,
+                        "timeout": ep.timeout
+                    }
+                    for ep_name, ep in env.endpoints.items()
+                },
+                "default_endpoint": env.default_endpoint,
                 "is_default": env.name == default
             }
             print(json.dumps(output, indent=2))
         else:
             marker = " (default)" if env.name == default else ""
             print(f"Environment: {env.name}{marker}")
-            print(f"  URL: {env.url}")
-            print(f"  Username: {env.username}")
-            print(f"  Ignore SSL: {env.ignore_ssl}")
-            print(f"  Timeout: {env.timeout}s")
-            print(f"\nStart session: hac session start {env.name}")
+            print()
+            
+            if not env.endpoints:
+                print("  No endpoints configured")
+                print(f"\n  Add an endpoint: hac endpoint add {env.name} hac --url https://... --username admin")
+            else:
+                print(f"  Endpoints ({len(env.endpoints)}):")
+                print()
+                for ep_name, ep in sorted(env.endpoints.items()):
+                    default_marker = " (default)" if ep_name == env.default_endpoint else ""
+                    print(f"    {ep_name}{default_marker}")
+                    print(f"      URL:        {ep.url}")
+                    print(f"      Username:   {ep.username}")
+                    print(f"      Ignore SSL: {ep.ignore_ssl}")
+                    print(f"      Timeout:    {ep.timeout}s")
+                    print()
+                
+                if env.default_endpoint:
+                    print(f"  Start session: hac session start {env.name}")
+                else:
+                    print(f"  Start session: hac session start {env.name} --endpoint <endpoint-name>")
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -97,27 +126,20 @@ def show_environment(
 @env_app.command("add")
 def add_environment(
     name: str = typer.Argument(..., help="Environment name"),
-    url: str = typer.Option(..., "--url", "-u", help="HAC base URL"),
-    username: str = typer.Option(..., "--username", help="Username"),
-    ignore_ssl: bool = typer.Option(False, "--ignore-ssl", help="Ignore SSL certificate errors"),
-    timeout: int = typer.Option(30, "--timeout", "-t", help="HTTP timeout in seconds"),
     set_default: bool = typer.Option(False, "--set-default", "-d", help="Set as default environment")
 ):
-    """Add a new environment."""
+    """Add a new environment (add endpoints separately with 'hac endpoint add')."""
     try:
         manager = EnvironmentManager()
         manager.add_environment(
             name=name,
-            url=url,
-            username=username,
-            ignore_ssl=ignore_ssl,
-            timeout=timeout,
             set_default=set_default
         )
         
         marker = " (set as default)" if set_default else ""
         print(f"✓ Environment '{name}' added{marker}")
-        print(f"\nStart session: hac session start {name}")
+        print(f"\nNext: Add endpoints to this environment")
+        print(f"  hac endpoint add {name} <endpoint-name> --url https://... --username admin")
     
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -127,33 +149,6 @@ def add_environment(
         raise typer.Exit(1)
 
 
-@env_app.command("update")
-def update_environment(
-    name: str = typer.Argument(..., help="Environment name"),
-    url: Optional[str] = typer.Option(None, "--url", "-u", help="New HAC base URL"),
-    username: Optional[str] = typer.Option(None, "--username", help="New username"),
-    ignore_ssl: Optional[bool] = typer.Option(None, "--ignore-ssl/--verify-ssl", help="SSL verification"),
-    timeout: Optional[int] = typer.Option(None, "--timeout", "-t", help="New timeout")
-):
-    """Update an existing environment."""
-    try:
-        manager = EnvironmentManager()
-        manager.update_environment(
-            name=name,
-            url=url,
-            username=username,
-            ignore_ssl=ignore_ssl,
-            timeout=timeout
-        )
-        
-        print(f"✓ Environment '{name}' updated")
-    
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        raise typer.Exit(1)
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        raise typer.Exit(1)
 
 
 @env_app.command("remove")

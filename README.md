@@ -33,6 +33,14 @@ Configuration file: `~/.config/hac-client/config.toml` (or use `HAC_CLIENT_CONFI
 
 **Note: Passwords are NEVER stored in configuration. Use session management instead.**
 
+### Configuration Model
+
+The configuration uses a hierarchical model:
+- **Environment**: A logical grouping of endpoints (e.g., "production", "staging", "local")
+- **Endpoint**: A specific HAC instance/node with URL and credentials
+
+This allows managing multiple HAC instances (e.g., different nodes in a cluster) within a single environment.
+
 Example configuration:
 
 ```toml
@@ -40,16 +48,57 @@ Example configuration:
 default_environment = "local"
 
 [environments.local]
+default_endpoint = "hac"
+
+[environments.local.endpoints.hac]
 url = "https://localhost:9002"
 username = "admin"
 ignore_ssl = true
 timeout = 30
 
-[environments.dev]
-url = "https://dev.example.com"
+[environments.production]
+default_endpoint = "hac-node1"
+
+[environments.production.endpoints.hac-node1]
+url = "https://prod-hac1.example.com:9002"
 username = "admin"
 ignore_ssl = false
 timeout = 60
+
+[environments.production.endpoints.hac-node2]
+url = "https://prod-hac2.example.com:9002"
+username = "admin"
+ignore_ssl = false
+timeout = 60
+
+[environments.production.endpoints.backoffice]
+url = "https://prod-backoffice.example.com"
+username = "admin"
+ignore_ssl = false
+timeout = 60
+```
+
+### Managing Environments and Endpoints
+
+```bash
+# Create an environment
+hac env add production --set-default
+
+# Add endpoints to the environment
+hac endpoint add production hac-node1 --url https://prod-hac1.example.com:9002 --username admin --set-default
+hac endpoint add production hac-node2 --url https://prod-hac2.example.com:9002 --username admin
+hac endpoint add production backoffice --url https://prod-backoffice.example.com --username admin
+
+# List environments and their endpoints
+hac env list
+hac env show production
+hac endpoint list production
+
+# Update an endpoint
+hac endpoint update production hac-node1 --url https://new-url.example.com
+
+# Set default endpoint for an environment
+hac endpoint set-default production hac-node2
 ```
 
 ### Security Considerations
@@ -68,18 +117,49 @@ timeout = 60
 
 **Best Practices:**
 1. Never use `--password` flag in scripts (visible in process list)
-2. Use environment variables for CI/CD: `HAC_PASSWORD` or `HAC_PASSWORD_<ENV>`
-3. Use stdin for secure scripting: `echo "$PASSWORD" | hac session start`
+2. Use environment variables for CI/CD: `HAC_PASSWORD` or `HAC_PASSWORD_<ENV>_<ENDPOINT>`
+3. Use stdin for secure scripting: `echo "$PASSWORD" | hac session start <env> --endpoint <ep>`
 4. Clear sessions after use: `hac session clear-all`
 5. Use `--ignore-ssl` only for development/localhost
 6. Rotate passwords regularly and clear old sessions
+7. Use specific endpoints for targeted operations (e.g., specific cluster nodes)
 
 ## Usage
+
+### Session Management
+
+Before executing commands, you must start a session:
+
+```bash
+# Start session for default endpoint in environment
+hac session start local
+
+# Start session for specific endpoint
+hac session start production --endpoint hac-node1
+
+# Password via environment variable
+HAC_PASSWORD=secret hac session start local
+
+# Password via stdin
+echo 'secret' | hac session start local
+
+# Import existing session
+hac session import local --endpoint hac --session-id abc123 --csrf-token def456
+
+# List active sessions
+hac session list
+
+# Clear a session
+hac session clear local/hac
+
+# Clear all sessions
+hac session clear-all
+```
 
 ### Groovy Script Execution
 
 ```bash
-# Execute inline script
+# Execute inline script (uses default environment/endpoint)
 hac groovy "return 'Hello World'"
 
 # Execute script from file
@@ -88,8 +168,8 @@ hac groovy -f script.groovy
 # Execute with commit mode
 hac groovy -f script.groovy --commit
 
-# Specify environment
-hac groovy "return 'test'" -e dev
+# Specify environment and endpoint
+hac groovy "return 'test'" -e production -n hac-node1
 ```
 
 ### FlexibleSearch Queries
@@ -103,6 +183,9 @@ hac flexsearch "SELECT {pk} FROM {Product}" --max-count 100
 
 # Output as CSV
 hac flexsearch "SELECT {pk} FROM {Product}" --csv
+
+# Specify environment and endpoint
+hac flexsearch "SELECT {pk} FROM {Product}" -e production -n hac-node2
 ```
 
 ### Impex Import
@@ -113,16 +196,28 @@ hac impex -f data.impex
 
 # Import with validation mode
 hac impex -f data.impex --validation strict
+
+# Specify environment and endpoint
+hac impex -f data.impex -e production -n hac-node1
 ```
 
-### Configuration
+### Configuration Discovery
 
 ```bash
 # Show current configuration
 hac config
 
-# List environments
-hac config --list-environments
+# List all environments
+hac env list
+
+# Show environment details
+hac env show production
+
+# List endpoints in an environment
+hac endpoint list production
+
+# Show endpoint details
+hac endpoint show production hac-node1
 ```
 
 ## Design

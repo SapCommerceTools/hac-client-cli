@@ -8,13 +8,20 @@ from typing import Optional, Dict
 
 
 @dataclass(frozen=True)
-class EnvironmentConfig:
-    """Configuration for a HAC environment."""
+class EndpointConfig:
+    """Configuration for a HAC endpoint (single instance/node)."""
     url: str
     username: str
-    password: Optional[str] = None
     ignore_ssl: bool = False
     timeout: int = 30
+
+
+@dataclass(frozen=True)
+class EnvironmentConfig:
+    """Configuration for a HAC environment (collection of endpoints)."""
+    name: str
+    endpoints: Dict[str, EndpointConfig]
+    default_endpoint: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -49,15 +56,20 @@ def load_config() -> HacClientConfig:
     config_path = get_config_path()
     
     if not config_path.exists():
-        # Return minimal default config
+        # Return minimal default config with single endpoint
         return HacClientConfig(
             default_environment="local",
             environments={
                 "local": EnvironmentConfig(
-                    url="https://localhost:9002",
-                    username="admin",
-                    password=None,
-                    ignore_ssl=True
+                    name="local",
+                    endpoints={
+                        "hac": EndpointConfig(
+                            url="https://localhost:9002",
+                            username="admin",
+                            ignore_ssl=True
+                        )
+                    },
+                    default_endpoint="hac"
                 )
             }
         )
@@ -68,29 +80,38 @@ def load_config() -> HacClientConfig:
     # Parse environments
     environments = {}
     for env_name, env_data in config_data.get("environments", {}).items():
-        # Skip if not a dict (e.g., if it's just "default = local")
+        # Skip if not a dict
         if not isinstance(env_data, dict):
             continue
         
-        # Validate required fields
-        if "url" not in env_data:
-            raise ValueError(f"Environment '{env_name}' missing required field 'url'")
-        if "username" not in env_data:
-            raise ValueError(f"Environment '{env_name}' missing required field 'username'")
+        # Parse endpoints for this environment
+        endpoints = {}
+        endpoints_data = env_data.get("endpoints", {})
         
-        # Password can come from config or environment variable
-        password = env_data.get("password")
-        if not password:
-            # Try HAC_PASSWORD env var, or HAC_PASSWORD_<ENV> for specific env
-            env_var_name = f"HAC_PASSWORD_{env_name.upper()}"
-            password = os.environ.get(env_var_name) or os.environ.get("HAC_PASSWORD")
+        if not endpoints_data:
+            raise ValueError(f"Environment '{env_name}' has no endpoints defined")
+        
+        for endpoint_name, endpoint_data in endpoints_data.items():
+            if not isinstance(endpoint_data, dict):
+                continue
+            
+            # Validate required fields
+            if "url" not in endpoint_data:
+                raise ValueError(f"Endpoint '{env_name}/{endpoint_name}' missing required field 'url'")
+            if "username" not in endpoint_data:
+                raise ValueError(f"Endpoint '{env_name}/{endpoint_name}' missing required field 'username'")
+            
+            endpoints[endpoint_name] = EndpointConfig(
+                url=endpoint_data["url"],
+                username=endpoint_data["username"],
+                ignore_ssl=endpoint_data.get("ignore_ssl", False),
+                timeout=endpoint_data.get("timeout", 30)
+            )
         
         environments[env_name] = EnvironmentConfig(
-            url=env_data["url"],
-            username=env_data["username"],
-            password=password,
-            ignore_ssl=env_data.get("ignore_ssl", False),
-            timeout=env_data.get("timeout", 30)
+            name=env_name,
+            endpoints=endpoints,
+            default_endpoint=env_data.get("default_endpoint")
         )
     
     return HacClientConfig(
@@ -119,4 +140,47 @@ def get_environment_config(environment: Optional[str] = None) -> EnvironmentConf
         raise KeyError(f"Environment '{env_name}' not found in configuration")
     
     return config.environments[env_name]
+
+
+def get_endpoint_config(
+    environment: Optional[str] = None,
+    endpoint: Optional[str] = None
+) -> tuple[str, str, EndpointConfig]:
+    """Get configuration for a specific endpoint.
+    
+    Args:
+        environment: Environment name (uses default if None)
+        endpoint: Endpoint name (uses environment default if None)
+        
+    Returns:
+        Tuple of (environment_name, endpoint_name, EndpointConfig)
+        
+    Raises:
+        KeyError: If environment or endpoint not found
+        ValueError: If no default endpoint and none specified
+    """
+    env_config = get_environment_config(environment)
+    config = load_config()
+    env_name = environment or config.default_environment
+    
+    # Determine endpoint name
+    endpoint_name = endpoint or env_config.default_endpoint
+    if not endpoint_name:
+        # If no default and only one endpoint, use it
+        if len(env_config.endpoints) == 1:
+            endpoint_name = next(iter(env_config.endpoints.keys()))
+        else:
+            raise ValueError(
+                f"Environment '{env_name}' has multiple endpoints but no default set. "
+                f"Please specify --endpoint or set default_endpoint in config."
+            )
+    
+    if endpoint_name not in env_config.endpoints:
+        available = ", ".join(env_config.endpoints.keys())
+        raise KeyError(
+            f"Endpoint '{endpoint_name}' not found in environment '{env_name}'. "
+            f"Available endpoints: {available}"
+        )
+    
+    return env_name, endpoint_name, env_config.endpoints[endpoint_name]
 

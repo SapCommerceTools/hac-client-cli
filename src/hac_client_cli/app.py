@@ -13,6 +13,7 @@ from typing import Optional
 
 from hac_client_cli.environment_manager import EnvironmentManager
 from hac_client_cli.commands_env import env_app
+from hac_client_cli.commands_endpoint import app as endpoint_app
 from hac_client_cli.commands_session import session_app
 from hac_client_core.client import HacClient, HacClientError
 from hac_client_core.auth import BasicAuthHandler
@@ -23,61 +24,54 @@ app = typer.Typer(
     add_completion=False
 )
 
-# Add environment and session management
+# Add environment, endpoint, and session management
 app.add_typer(env_app, name="env")
+app.add_typer(endpoint_app, name="endpoint")
 app.add_typer(session_app, name="session")
 
 
-def create_client(environment: Optional[str] = None, quiet: bool = False) -> HacClient:
+def create_client(environment: Optional[str] = None, endpoint: Optional[str] = None, quiet: bool = False) -> HacClient:
     """Create HAC client from configuration.
     
     Args:
         environment: Environment name (uses default if None)
+        endpoint: Endpoint name (uses environment default if None)
         quiet: Suppress informational messages
         
     Returns:
         Configured HacClient instance
     """
     from hac_client_core.session import SessionManager
+    from hac_client_cli.config_loader import get_endpoint_config
     
-    manager = EnvironmentManager()
+    # Get endpoint configuration
+    env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
     
-    # Get environment name
-    env_name = environment or manager.get_default_environment()
-    if not env_name:
-        print("ERROR: No default environment set", file=sys.stderr)
-        print("Add an environment: hac env add <name> --url <url> --username <user>", file=sys.stderr)
-        raise typer.Exit(1)
-    
-    # Get environment config
-    env = manager.get_environment(env_name)
-    if not env:
-        print(f"ERROR: Environment '{env_name}' not found", file=sys.stderr)
-        print("List environments: hac env list", file=sys.stderr)
-        raise typer.Exit(1)
+    # Create session identifier
+    session_id = f"{env_name}/{endpoint_name}"
     
     # Check for existing session
     session_manager = SessionManager()
-    session = session_manager.load_session(env.url, env.username, env_name)
+    session = session_manager.load_session(ep_config.url, ep_config.username, session_id)
     
     if not session:
-        print(f"ERROR: No active session for environment '{env_name}'", file=sys.stderr)
+        print(f"ERROR: No active session for '{session_id}'", file=sys.stderr)
         print(f"\nStart a session:", file=sys.stderr)
-        print(f"  hac session start {env_name}", file=sys.stderr)
+        print(f"  hac session start {env_name} --endpoint {endpoint_name}", file=sys.stderr)
         print(f"\nOr import existing session:", file=sys.stderr)
-        print(f"  hac session import {env_name} --session-id <id> --csrf-token <token>", file=sys.stderr)
+        print(f"  hac session import {env_name} --endpoint {endpoint_name} --session-id <id> --csrf-token <token>", file=sys.stderr)
         raise typer.Exit(1)
     
     # Create client with existing session (no auto-login)
     # We need a dummy password since BasicAuthHandler requires it, but it won't be used
-    auth = BasicAuthHandler(env.username, "dummy")
+    auth = BasicAuthHandler(ep_config.username, "dummy")
     
     client = HacClient(
-        base_url=env.url,
+        base_url=ep_config.url,
         auth_handler=auth,
-        environment=env_name,
-        timeout=env.timeout,
-        ignore_ssl=env.ignore_ssl,
+        environment=session_id,  # Use composite key
+        timeout=ep_config.timeout,
+        ignore_ssl=ep_config.ignore_ssl,
         session_persistence=True,
         quiet=quiet
     )
@@ -100,6 +94,7 @@ def groovy_command(
     file: bool = typer.Option(False, "--file", "-f", help="Treat script as file path"),
     commit: bool = typer.Option(False, "--commit", "-c", help="Enable commit mode"),
     environment: Optional[str] = typer.Option(None, "--environment", "-e", help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
 ):
@@ -115,7 +110,7 @@ def groovy_command(
             script_content = script_path.read_text()
         
         # Create client and execute
-        client = create_client(environment, quiet)
+        client = create_client(environment, endpoint, quiet)
         result = client.execute_groovy(script_content, commit=commit)
         
         if not result.success:
@@ -148,13 +143,14 @@ def flexsearch_command(
     max_count: int = typer.Option(200, "--max-count", "-m", help="Maximum number of results"),
     locale: str = typer.Option("en", "--locale", "-l", help="Locale for the query"),
     environment: Optional[str] = typer.Option(None, "--environment", "-e", help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name"),
     csv: bool = typer.Option(False, "--csv", help="Output as CSV"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
 ):
     """Execute FlexibleSearch query in HAC."""
     try:
-        client = create_client(environment, quiet)
+        client = create_client(environment, endpoint, quiet)
         result = client.execute_flexiblesearch(query, max_count=max_count, locale=locale)
         
         if not result.success:
@@ -196,6 +192,7 @@ def impex_command(
     file: Path = typer.Option(..., "--file", "-f", help="Impex file to import"),
     validation: str = typer.Option("strict", "--validation", "-v", help="Validation mode (strict, relaxed, import_relaxed)"),
     environment: Optional[str] = typer.Option(None, "--environment", "-e", help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
 ):
@@ -207,7 +204,7 @@ def impex_command(
         
         impex_content = file.read_text()
         
-        client = create_client(environment, quiet)
+        client = create_client(environment, endpoint, quiet)
         result = client.import_impex(impex_content, validation_mode=validation)
         
         if not result.success:

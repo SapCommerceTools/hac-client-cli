@@ -8,15 +8,11 @@ from typing import Optional, Dict, List
 
 
 @dataclass
-class Environment:
-    """HAC environment configuration.
-    
-    Note: Passwords are NEVER stored in environment config.
-    Use 'hac session start' to authenticate and create a session.
-    """
+class Endpoint:
+    """HAC endpoint (single instance/node) configuration."""
     
     name: str
-    """Environment name"""
+    """Endpoint name"""
     
     url: str
     """HAC base URL"""
@@ -29,6 +25,24 @@ class Environment:
     
     timeout: int = 30
     """HTTP timeout in seconds"""
+
+
+@dataclass
+class Environment:
+    """HAC environment configuration (collection of endpoints).
+    
+    Note: Passwords are NEVER stored in endpoint config.
+    Use 'hac session start' to authenticate and create a session.
+    """
+    
+    name: str
+    """Environment name"""
+    
+    endpoints: Dict[str, Endpoint]
+    """Map of endpoint name to endpoint config"""
+    
+    default_endpoint: Optional[str] = None
+    """Default endpoint for this environment"""
 
 
 class EnvironmentManager:
@@ -62,7 +76,7 @@ class EnvironmentManager:
         """Save configuration to file."""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Convert to TOML format manually since tomli_w might not be available
+        # Convert to TOML format manually
         lines = []
         
         # Write default environment
@@ -70,22 +84,35 @@ class EnvironmentManager:
             lines.append(f'default_environment = "{config["default_environment"]}"')
             lines.append("")
         
-        # Write environments
+        # Write environments with endpoints
         for env_name, env_data in config.get("environments", {}).items():
             if not isinstance(env_data, dict):
                 continue
             
             lines.append(f"[environments.{env_name}]")
-            lines.append(f'url = "{env_data["url"]}"')
-            lines.append(f'username = "{env_data["username"]}"')
             
-            if env_data.get("ignore_ssl", False):
-                lines.append(f'ignore_ssl = true')
-            
-            if env_data.get("timeout", 30) != 30:
-                lines.append(f'timeout = {env_data["timeout"]}')
+            # Write default endpoint if set
+            if env_data.get("default_endpoint"):
+                lines.append(f'default_endpoint = "{env_data["default_endpoint"]}"')
             
             lines.append("")
+            
+            # Write each endpoint
+            for endpoint_name, endpoint_data in env_data.get("endpoints", {}).items():
+                if not isinstance(endpoint_data, dict):
+                    continue
+                
+                lines.append(f"[environments.{env_name}.endpoints.{endpoint_name}]")
+                lines.append(f'url = "{endpoint_data["url"]}"')
+                lines.append(f'username = "{endpoint_data["username"]}"')
+                
+                if endpoint_data.get("ignore_ssl", False):
+                    lines.append(f'ignore_ssl = true')
+                
+                if endpoint_data.get("timeout", 30) != 30:
+                    lines.append(f'timeout = {endpoint_data["timeout"]}')
+                
+                lines.append("")
         
         with self.config_path.open("w") as f:
             f.write("\n".join(lines))
@@ -103,12 +130,24 @@ class EnvironmentManager:
             if not isinstance(env_data, dict):
                 continue
             
+            # Parse endpoints
+            endpoints = {}
+            for endpoint_name, endpoint_data in env_data.get("endpoints", {}).items():
+                if not isinstance(endpoint_data, dict):
+                    continue
+                
+                endpoints[endpoint_name] = Endpoint(
+                    name=endpoint_name,
+                    url=endpoint_data["url"],
+                    username=endpoint_data["username"],
+                    ignore_ssl=endpoint_data.get("ignore_ssl", False),
+                    timeout=endpoint_data.get("timeout", 30)
+                )
+            
             environments.append(Environment(
                 name=env_name,
-                url=env_data["url"],
-                username=env_data["username"],
-                ignore_ssl=env_data.get("ignore_ssl", False),
-                timeout=env_data.get("timeout", 30)
+                endpoints=endpoints,
+                default_endpoint=env_data.get("default_endpoint")
             ))
         
         return sorted(environments, key=lambda e: e.name)
@@ -131,20 +170,12 @@ class EnvironmentManager:
     def add_environment(
         self,
         name: str,
-        url: str,
-        username: str,
-        ignore_ssl: bool = False,
-        timeout: int = 30,
         set_default: bool = False
     ) -> None:
-        """Add a new environment.
+        """Add a new environment (empty, add endpoints separately).
         
         Args:
             name: Environment name
-            url: HAC base URL
-            username: Username
-            ignore_ssl: Ignore SSL errors
-            timeout: HTTP timeout
             set_default: Set as default environment
             
         Raises:
@@ -159,10 +190,7 @@ class EnvironmentManager:
             raise ValueError(f"Environment '{name}' already exists")
         
         config["environments"][name] = {
-            "url": url,
-            "username": username,
-            "ignore_ssl": ignore_ssl,
-            "timeout": timeout
+            "endpoints": {}
         }
         
         if set_default or not config.get("default_environment"):
@@ -170,42 +198,27 @@ class EnvironmentManager:
         
         self._save_config(config)
     
-    def update_environment(
-        self,
-        name: str,
-        url: Optional[str] = None,
-        username: Optional[str] = None,
-        ignore_ssl: Optional[bool] = None,
-        timeout: Optional[int] = None
-    ) -> None:
-        """Update an existing environment.
+    def set_default_endpoint(self, env_name: str, endpoint_name: str) -> None:
+        """Set the default endpoint for an environment.
         
         Args:
-            name: Environment name
-            url: New URL (optional)
-            username: New username (optional)
-            ignore_ssl: New SSL setting (optional)
-            timeout: New timeout (optional)
+            env_name: Environment name
+            endpoint_name: Endpoint name to set as default
             
         Raises:
-            ValueError: If environment doesn't exist
+            ValueError: If environment or endpoint doesn't exist
         """
         config = self._load_config()
         
-        if name not in config.get("environments", {}):
-            raise ValueError(f"Environment '{name}' not found")
+        if env_name not in config.get("environments", {}):
+            raise ValueError(f"Environment '{env_name}' not found")
         
-        env_config = config["environments"][name]
+        env_config = config["environments"][env_name]
         
-        if url is not None:
-            env_config["url"] = url
-        if username is not None:
-            env_config["username"] = username
-        if ignore_ssl is not None:
-            env_config["ignore_ssl"] = ignore_ssl
-        if timeout is not None:
-            env_config["timeout"] = timeout
+        if endpoint_name not in env_config.get("endpoints", {}):
+            raise ValueError(f"Endpoint '{endpoint_name}' not found in environment '{env_name}'")
         
+        env_config["default_endpoint"] = endpoint_name
         self._save_config(config)
     
     def remove_environment(self, name: str) -> None:
@@ -252,5 +265,168 @@ class EnvironmentManager:
             raise ValueError(f"Environment '{name}' not found")
         
         config["default_environment"] = name
+        self._save_config(config)
+    
+    # Endpoint management methods
+    
+    def list_endpoints(self, env_name: str) -> List[Endpoint]:
+        """List all endpoints in an environment.
+        
+        Args:
+            env_name: Environment name
+            
+        Returns:
+            List of Endpoint objects
+            
+        Raises:
+            ValueError: If environment doesn't exist
+        """
+        env = self.get_environment(env_name)
+        if not env:
+            raise ValueError(f"Environment '{env_name}' not found")
+        
+        return sorted(env.endpoints.values(), key=lambda e: e.name)
+    
+    def get_endpoint(self, env_name: str, endpoint_name: str) -> Optional[Endpoint]:
+        """Get a specific endpoint.
+        
+        Args:
+            env_name: Environment name
+            endpoint_name: Endpoint name
+            
+        Returns:
+            Endpoint if found, None otherwise
+        """
+        env = self.get_environment(env_name)
+        if not env:
+            return None
+        
+        return env.endpoints.get(endpoint_name)
+    
+    def add_endpoint(
+        self,
+        env_name: str,
+        endpoint_name: str,
+        url: str,
+        username: str,
+        ignore_ssl: bool = False,
+        timeout: int = 30,
+        set_default: bool = False
+    ) -> None:
+        """Add a new endpoint to an environment.
+        
+        Args:
+            env_name: Environment name
+            endpoint_name: Endpoint name
+            url: HAC base URL
+            username: Username
+            ignore_ssl: Ignore SSL errors
+            timeout: HTTP timeout
+            set_default: Set as default endpoint for this environment
+            
+        Raises:
+            ValueError: If environment doesn't exist or endpoint already exists
+        """
+        config = self._load_config()
+        
+        if env_name not in config.get("environments", {}):
+            raise ValueError(f"Environment '{env_name}' not found")
+        
+        env_config = config["environments"][env_name]
+        
+        if "endpoints" not in env_config:
+            env_config["endpoints"] = {}
+        
+        if endpoint_name in env_config["endpoints"]:
+            raise ValueError(f"Endpoint '{endpoint_name}' already exists in environment '{env_name}'")
+        
+        env_config["endpoints"][endpoint_name] = {
+            "url": url,
+            "username": username,
+            "ignore_ssl": ignore_ssl,
+            "timeout": timeout
+        }
+        
+        # Set as default if requested or if it's the first endpoint
+        if set_default or not env_config.get("default_endpoint"):
+            env_config["default_endpoint"] = endpoint_name
+        
+        self._save_config(config)
+    
+    def update_endpoint(
+        self,
+        env_name: str,
+        endpoint_name: str,
+        url: Optional[str] = None,
+        username: Optional[str] = None,
+        ignore_ssl: Optional[bool] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Update an existing endpoint.
+        
+        Args:
+            env_name: Environment name
+            endpoint_name: Endpoint name
+            url: New URL (optional)
+            username: New username (optional)
+            ignore_ssl: New SSL setting (optional)
+            timeout: New timeout (optional)
+            
+        Raises:
+            ValueError: If environment or endpoint doesn't exist
+        """
+        config = self._load_config()
+        
+        if env_name not in config.get("environments", {}):
+            raise ValueError(f"Environment '{env_name}' not found")
+        
+        env_config = config["environments"][env_name]
+        
+        if endpoint_name not in env_config.get("endpoints", {}):
+            raise ValueError(f"Endpoint '{endpoint_name}' not found in environment '{env_name}'")
+        
+        endpoint_config = env_config["endpoints"][endpoint_name]
+        
+        if url is not None:
+            endpoint_config["url"] = url
+        if username is not None:
+            endpoint_config["username"] = username
+        if ignore_ssl is not None:
+            endpoint_config["ignore_ssl"] = ignore_ssl
+        if timeout is not None:
+            endpoint_config["timeout"] = timeout
+        
+        self._save_config(config)
+    
+    def remove_endpoint(self, env_name: str, endpoint_name: str) -> None:
+        """Remove an endpoint from an environment.
+        
+        Args:
+            env_name: Environment name
+            endpoint_name: Endpoint name
+            
+        Raises:
+            ValueError: If environment doesn't exist, endpoint doesn't exist, or it's the last endpoint
+        """
+        config = self._load_config()
+        
+        if env_name not in config.get("environments", {}):
+            raise ValueError(f"Environment '{env_name}' not found")
+        
+        env_config = config["environments"][env_name]
+        
+        if endpoint_name not in env_config.get("endpoints", {}):
+            raise ValueError(f"Endpoint '{endpoint_name}' not found in environment '{env_name}'")
+        
+        if len(env_config["endpoints"]) == 1:
+            raise ValueError(f"Cannot remove last endpoint from environment '{env_name}'")
+        
+        del env_config["endpoints"][endpoint_name]
+        
+        # Clear default if it was the default endpoint
+        if env_config.get("default_endpoint") == endpoint_name:
+            # Set first remaining endpoint as default
+            env_config["default_endpoint"] = next(iter(env_config["endpoints"].keys()))
+        
         self._save_config(config)
 

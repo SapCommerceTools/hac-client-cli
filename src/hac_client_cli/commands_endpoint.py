@@ -32,7 +32,6 @@ def list_endpoints(
             default_marker = " (default)" if env and endpoint.name == env.default_endpoint else ""
             print(f"  {endpoint.name}{default_marker}")
             print(f"    URL:        {endpoint.url}")
-            print(f"    Username:   {endpoint.username}")
             print(f"    Ignore SSL: {endpoint.ignore_ssl}")
             print(f"    Timeout:    {endpoint.timeout}s")
             print()
@@ -64,7 +63,6 @@ def show_endpoint(
         print("Status: default")
     print()
     print(f"URL:        {ep.url}")
-    print(f"Username:   {ep.username}")
     print(f"Ignore SSL: {ep.ignore_ssl}")
     print(f"Timeout:    {ep.timeout}s")
 
@@ -74,12 +72,15 @@ def add_endpoint(
     environment: str = typer.Argument(..., help="Environment name"),
     endpoint: str = typer.Argument(..., help="Endpoint name"),
     url: str = typer.Option(..., "--url", "-u", help="HAC base URL"),
-    username: str = typer.Option(..., "--username", help="Username"),
     ignore_ssl: bool = typer.Option(False, "--ignore-ssl", help="Ignore SSL certificate errors"),
     timeout: int = typer.Option(30, "--timeout", help="HTTP timeout in seconds"),
     set_default: bool = typer.Option(False, "--set-default", help="Set as default endpoint")
 ):
-    """Add a new endpoint to an environment."""
+    """Add a new endpoint to an environment.
+    
+    Note: Username is provided during session creation, not endpoint configuration.
+    An endpoint is just infrastructure (URL, connection settings).
+    """
     manager = EnvironmentManager(get_config_path())
     
     try:
@@ -87,7 +88,6 @@ def add_endpoint(
             env_name=environment,
             endpoint_name=endpoint,
             url=url,
-            username=username,
             ignore_ssl=ignore_ssl,
             timeout=timeout,
             set_default=set_default
@@ -95,6 +95,7 @@ def add_endpoint(
         
         default_msg = " (set as default)" if set_default else ""
         print(f"✓ Added endpoint '{endpoint}' to environment '{environment}'{default_msg}")
+        print(f"\nStart session: hac session start {environment} --endpoint {endpoint} --username <user>")
     
     except ValueError as e:
         print(f"ERROR: {e}")
@@ -106,7 +107,6 @@ def update_endpoint(
     environment: str = typer.Argument(..., help="Environment name"),
     endpoint: str = typer.Argument(..., help="Endpoint name"),
     url: Optional[str] = typer.Option(None, "--url", "-u", help="HAC base URL"),
-    username: Optional[str] = typer.Option(None, "--username", help="Username"),
     ignore_ssl: Optional[bool] = typer.Option(None, "--ignore-ssl/--no-ignore-ssl", help="Ignore SSL errors"),
     timeout: Optional[int] = typer.Option(None, "--timeout", help="HTTP timeout in seconds")
 ):
@@ -118,7 +118,6 @@ def update_endpoint(
             env_name=environment,
             endpoint_name=endpoint,
             url=url,
-            username=username,
             ignore_ssl=ignore_ssl,
             timeout=timeout
         )

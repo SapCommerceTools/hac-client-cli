@@ -33,6 +33,8 @@ app.add_typer(session_app, name="session")
 def create_client(environment: Optional[str] = None, endpoint: Optional[str] = None, quiet: bool = False) -> HacClient:
     """Create HAC client from configuration.
     
+    Requires an active session. Use 'hac session start' to create one.
+    
     Args:
         environment: Environment name (uses default if None)
         endpoint: Endpoint name (uses environment default if None)
@@ -51,20 +53,29 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
     session_id = f"{env_name}/{endpoint_name}"
     
     # Check for existing session
+    # Note: We need to find a session for this endpoint, but we don't know the username yet
+    # Sessions are keyed by (base_url, username, environment), so we need to list all sessions
     session_manager = SessionManager()
-    session = session_manager.load_session(ep_config.url, ep_config.username, session_id)
+    all_sessions = session_manager.list_sessions()
+    
+    # Find a session for this endpoint
+    session = None
+    for s in all_sessions:
+        if s.environment == session_id and s.base_url == ep_config.url:
+            session = s
+            break
     
     if not session:
         print(f"ERROR: No active session for '{session_id}'", file=sys.stderr)
         print(f"\nStart a session:", file=sys.stderr)
-        print(f"  hac session start {env_name} --endpoint {endpoint_name}", file=sys.stderr)
+        print(f"  hac session start {env_name} --endpoint {endpoint_name} --username <user>", file=sys.stderr)
         print(f"\nOr import existing session:", file=sys.stderr)
-        print(f"  hac session import {env_name} --endpoint {endpoint_name} --session-id <id> --csrf-token <token>", file=sys.stderr)
+        print(f"  hac session import {env_name} --endpoint {endpoint_name} --username <user> --session-id <id> --csrf-token <token>", file=sys.stderr)
         raise typer.Exit(1)
     
     # Create client with existing session (no auto-login)
     # We need a dummy password since BasicAuthHandler requires it, but it won't be used
-    auth = BasicAuthHandler(ep_config.username, "dummy")
+    auth = BasicAuthHandler(session.username, "dummy")
     
     client = HacClient(
         base_url=ep_config.url,

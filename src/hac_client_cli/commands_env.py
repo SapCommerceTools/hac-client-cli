@@ -101,7 +101,7 @@ def show_environment(
             
             if not env.endpoints:
                 print("  No endpoints configured")
-                print(f"\n  Add an endpoint: hac endpoint add {env.name} hac --url https://... --username admin")
+                print(f"\n  Add an endpoint: hac endpoint add {env.name} hac --url https://...")
             else:
                 print(f"  Endpoints ({len(env.endpoints)}):")
                 print()
@@ -109,15 +109,14 @@ def show_environment(
                     default_marker = " (default)" if ep_name == env.default_endpoint else ""
                     print(f"    {ep_name}{default_marker}")
                     print(f"      URL:        {ep.url}")
-                    print(f"      Username:   {ep.username}")
                     print(f"      Ignore SSL: {ep.ignore_ssl}")
                     print(f"      Timeout:    {ep.timeout}s")
                     print()
                 
                 if env.default_endpoint:
-                    print(f"  Start session: hac session start {env.name}")
+                    print(f"  Start session: hac session start {env.name} --username <user>")
                 else:
-                    print(f"  Start session: hac session start {env.name} --endpoint <endpoint-name>")
+                    print(f"  Start session: hac session start {env.name} --endpoint <endpoint-name> --username <user>")
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

@@ -9,9 +9,12 @@ from typing import Optional, Dict
 
 @dataclass(frozen=True)
 class EndpointConfig:
-    """Configuration for a HAC endpoint (single instance/node)."""
+    """Configuration for a HAC endpoint (single instance/node).
+    
+    Note: Username is NOT part of endpoint config - it's part of authentication/session.
+    Different users can connect to the same endpoint with different credentials.
+    """
     url: str
-    username: str
     ignore_ssl: bool = False
     timeout: int = 30
 
@@ -98,12 +101,9 @@ def load_config() -> HacClientConfig:
             # Validate required fields
             if "url" not in endpoint_data:
                 raise ValueError(f"Endpoint '{env_name}/{endpoint_name}' missing required field 'url'")
-            if "username" not in endpoint_data:
-                raise ValueError(f"Endpoint '{env_name}/{endpoint_name}' missing required field 'username'")
             
             endpoints[endpoint_name] = EndpointConfig(
                 url=endpoint_data["url"],
-                username=endpoint_data["username"],
                 ignore_ssl=endpoint_data.get("ignore_ssl", False),
                 timeout=endpoint_data.get("timeout", 30)
             )

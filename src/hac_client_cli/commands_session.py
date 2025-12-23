@@ -30,21 +30,27 @@ def format_duration(seconds: float) -> str:
 def start_session(
     environment: str = typer.Argument(..., help="Environment name"),
     endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name (uses default if not specified)"),
+    username: Optional[str] = typer.Option(None, "--username", "-u", help="Username (or use env var)"),
     password: Optional[str] = typer.Option(None, "--password", "-p", help="Password (or use stdin/env var)")
 ):
     """Start a new HAC session (authenticate and create session).
     
+    Username can be provided via:
+    - Command option: --username <user>
+    - Environment variable: HAC_USERNAME or HAC_USERNAME_<ENV>_<ENDPOINT>
+    - Interactive prompt: if not provided
+    
     Password can be provided via:
     - Command option: --password <pass> (not recommended)
     - Environment variable: HAC_PASSWORD or HAC_PASSWORD_<ENV>_<ENDPOINT>
-    - Standard input: echo 'password' | hac session start <env>
+    - Standard input: echo 'password' | hac session start <env> --username <user>
     - Interactive prompt: if none of the above
     
     Examples:
-        hac session start local
-        hac session start local --endpoint hac
-        HAC_PASSWORD=secret hac session start local
-        echo 'secret' | hac session start local --endpoint hac
+        hac session start local --username admin
+        hac session start local --endpoint hac --username admin
+        HAC_USERNAME=admin HAC_PASSWORD=secret hac session start local
+        echo 'secret' | hac session start local --username admin
     """
     try:
         from hac_client_cli.config_loader import get_endpoint_config
@@ -54,6 +60,17 @@ def start_session(
         
         # Create session identifier
         session_id = f"{env_name}/{endpoint_name}"
+        
+        # Get username from various sources
+        if not username:
+            # Try environment variable (specific to env/endpoint, then env, then generic)
+            env_ep_var = f"HAC_USERNAME_{env_name.upper()}_{endpoint_name.upper()}"
+            env_var = f"HAC_USERNAME_{env_name.upper()}"
+            username = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_USERNAME")
+        
+        if not username:
+            # Interactive prompt
+            username = typer.prompt("Username")
         
         # Get password from various sources
         if not password:
@@ -74,7 +91,7 @@ def start_session(
         
         try:
             # Create client and authenticate
-            auth = BasicAuthHandler(ep_config.username, password)
+            auth = BasicAuthHandler(username, password)
             client = HacClient(
                 base_url=ep_config.url,
                 auth_handler=auth,
@@ -89,7 +106,7 @@ def start_session(
             client.login()
             
             print(f"✓ Session started for '{session_id}'")
-            print(f"  User: {ep_config.username}")
+            print(f"  User: {username}")
             print(f"  URL: {ep_config.url}")
         
         finally:
@@ -107,11 +124,16 @@ def start_session(
 def import_session(
     environment: str = typer.Argument(..., help="Environment name"),
     endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name (uses default if not specified)"),
+    username: Optional[str] = typer.Option(None, "--username", "-u", help="Username (or use env var)"),
     session_id: Optional[str] = typer.Option(None, "--session-id", help="Session ID (JSESSIONID)"),
     csrf_token: Optional[str] = typer.Option(None, "--csrf-token", help="CSRF token"),
     route_cookie: Optional[str] = typer.Option(None, "--route-cookie", help="ROUTE cookie (optional)")
 ):
     """Import an existing HAC session from tokens.
+    
+    Username can be provided via:
+    - Command option: --username <user>
+    - Environment variable: HAC_USERNAME or HAC_USERNAME_<ENV>_<ENDPOINT>
     
     Tokens can be provided via:
     - Command options (not recommended for security)
@@ -119,17 +141,17 @@ def import_session(
       - HAC_SESSION_ID or HAC_SESSION_ID_<ENV>_<ENDPOINT>
       - HAC_CSRF_TOKEN or HAC_CSRF_TOKEN_<ENV>_<ENDPOINT>
       - HAC_ROUTE_COOKIE or HAC_ROUTE_COOKIE_<ENV>_<ENDPOINT>
-    - Standard input (JSON format)
+    - Standard input (JSON format with username, session_id, csrf_token fields)
     
     Examples:
         # Via environment variables
-        HAC_SESSION_ID=abc123 HAC_CSRF_TOKEN=def456 hac session import local
+        HAC_USERNAME=admin HAC_SESSION_ID=abc123 HAC_CSRF_TOKEN=def456 hac session import local
         
         # Via stdin (JSON)
-        echo '{"session_id":"abc","csrf_token":"def"}' | hac session import local --endpoint hac
+        echo '{"username":"admin","session_id":"abc","csrf_token":"def"}' | hac session import local --endpoint hac
         
         # Via command options
-        hac session import local --endpoint hac --session-id abc123 --csrf-token def456
+        hac session import local --endpoint hac --username admin --session-id abc123 --csrf-token def456
     """
     try:
         from hac_client_cli.config_loader import get_endpoint_config
@@ -140,7 +162,24 @@ def import_session(
         # Create session identifier
         sess_id = f"{env_name}/{endpoint_name}"
         
+        # Get username from various sources
+        if not username:
+            # Try environment variables
+            env_ep_var = f"HAC_USERNAME_{env_name.upper()}_{endpoint_name.upper()}"
+            env_var = f"HAC_USERNAME_{env_name.upper()}"
+            username = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_USERNAME")
+        
         # Get tokens from various sources
+        if not session_id or not csrf_token or not username:
+            # Try stdin (JSON)
+            if not sys.stdin.isatty():
+                import json
+                data = json.load(sys.stdin)
+                username = username or data.get("username")
+                session_id = session_id or data.get("session_id")
+                csrf_token = csrf_token or data.get("csrf_token")
+                route_cookie = route_cookie or data.get("route_cookie")
+        
         if not session_id or not csrf_token:
             # Try environment variables
             env_ep_prefix = f"{env_name.upper()}_{endpoint_name.upper()}"
@@ -149,14 +188,10 @@ def import_session(
             csrf_token = csrf_token or os.environ.get(f"HAC_CSRF_TOKEN_{env_ep_prefix}") or os.environ.get(f"HAC_CSRF_TOKEN_{env_prefix}") or os.environ.get("HAC_CSRF_TOKEN")
             route_cookie = route_cookie or os.environ.get(f"HAC_ROUTE_COOKIE_{env_ep_prefix}") or os.environ.get(f"HAC_ROUTE_COOKIE_{env_prefix}") or os.environ.get("HAC_ROUTE_COOKIE")
         
-        if not session_id or not csrf_token:
-            # Try stdin (JSON)
-            if not sys.stdin.isatty():
-                import json
-                data = json.load(sys.stdin)
-                session_id = session_id or data.get("session_id")
-                csrf_token = csrf_token or data.get("csrf_token")
-                route_cookie = route_cookie or data.get("route_cookie")
+        if not username:
+            print("ERROR: Username not provided", file=sys.stderr)
+            print("Provide via --username, HAC_USERNAME env var, or stdin (JSON)", file=sys.stderr)
+            raise typer.Exit(1)
         
         if not session_id:
             print("ERROR: Session ID not provided", file=sys.stderr)
@@ -172,7 +207,7 @@ def import_session(
         session_manager = SessionManager()
         session_manager.save_session(
             base_url=ep_config.url,
-            username=ep_config.username,
+            username=username,
             environment=sess_id,  # Use composite key
             session_id=session_id,
             csrf_token=csrf_token,
@@ -180,7 +215,7 @@ def import_session(
         )
         
         print(f"✓ Session imported for '{sess_id}'")
-        print(f"  User: {ep_config.username}")
+        print(f"  User: {username}")
         print(f"  URL: {ep_config.url}")
         print(f"  Session ID: {session_id[:16]}...")
     

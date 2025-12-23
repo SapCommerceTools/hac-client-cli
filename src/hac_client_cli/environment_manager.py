@@ -9,16 +9,17 @@ from typing import Optional, Dict, List
 
 @dataclass
 class Endpoint:
-    """HAC endpoint (single instance/node) configuration."""
+    """HAC endpoint (single instance/node) configuration.
+    
+    Note: Username is NOT stored here - it's part of authentication/session.
+    An endpoint is just infrastructure (URL, connection settings).
+    """
     
     name: str
     """Endpoint name"""
     
     url: str
     """HAC base URL"""
-    
-    username: str
-    """Username"""
     
     ignore_ssl: bool = False
     """Ignore SSL certificate errors"""
@@ -104,10 +105,9 @@ class EnvironmentManager:
                 
                 lines.append(f"[environments.{env_name}.endpoints.{endpoint_name}]")
                 lines.append(f'url = "{endpoint_data["url"]}"')
-                lines.append(f'username = "{endpoint_data["username"]}"')
                 
                 if endpoint_data.get("ignore_ssl", False):
-                    lines.append(f'ignore_ssl = true')
+                    lines.append('ignore_ssl = true')
                 
                 if endpoint_data.get("timeout", 30) != 30:
                     lines.append(f'timeout = {endpoint_data["timeout"]}')
@@ -139,7 +139,6 @@ class EnvironmentManager:
                 endpoints[endpoint_name] = Endpoint(
                     name=endpoint_name,
                     url=endpoint_data["url"],
-                    username=endpoint_data["username"],
                     ignore_ssl=endpoint_data.get("ignore_ssl", False),
                     timeout=endpoint_data.get("timeout", 30)
                 )
@@ -308,7 +307,6 @@ class EnvironmentManager:
         env_name: str,
         endpoint_name: str,
         url: str,
-        username: str,
         ignore_ssl: bool = False,
         timeout: int = 30,
         set_default: bool = False
@@ -319,7 +317,6 @@ class EnvironmentManager:
             env_name: Environment name
             endpoint_name: Endpoint name
             url: HAC base URL
-            username: Username
             ignore_ssl: Ignore SSL errors
             timeout: HTTP timeout
             set_default: Set as default endpoint for this environment
@@ -342,7 +339,6 @@ class EnvironmentManager:
         
         env_config["endpoints"][endpoint_name] = {
             "url": url,
-            "username": username,
             "ignore_ssl": ignore_ssl,
             "timeout": timeout
         }
@@ -358,7 +354,6 @@ class EnvironmentManager:
         env_name: str,
         endpoint_name: str,
         url: Optional[str] = None,
-        username: Optional[str] = None,
         ignore_ssl: Optional[bool] = None,
         timeout: Optional[int] = None
     ) -> None:
@@ -368,7 +363,6 @@ class EnvironmentManager:
             env_name: Environment name
             endpoint_name: Endpoint name
             url: New URL (optional)
-            username: New username (optional)
             ignore_ssl: New SSL setting (optional)
             timeout: New timeout (optional)
             
@@ -389,8 +383,6 @@ class EnvironmentManager:
         
         if url is not None:
             endpoint_config["url"] = url
-        if username is not None:
-            endpoint_config["username"] = username
         if ignore_ssl is not None:
             endpoint_config["ignore_ssl"] = ignore_ssl
         if timeout is not None:

@@ -35,11 +35,16 @@ Configuration file: `~/.config/hac-client/config.toml` (or use `HAC_CLIENT_CONFI
 
 ### Configuration Model
 
-The configuration uses a hierarchical model:
-- **Environment**: A logical grouping of endpoints (e.g., "production", "staging", "local")
-- **Endpoint**: A specific HAC instance/node with URL and credentials
+The configuration separates infrastructure from authentication:
 
-This allows managing multiple HAC instances (e.g., different nodes in a cluster) within a single environment.
+- **Environment**: A logical grouping (e.g., "production", "staging", "local")
+- **Endpoint**: A specific HAC instance/node with URL and connection settings (NO credentials)
+- **Session**: Authentication (username + tokens) for a specific endpoint
+
+This separation means:
+- Multiple users can authenticate to the same endpoint with different credentials
+- Credentials are tied to sessions, not infrastructure configuration
+- The same user can have multiple sessions (different endpoints, different environments)
 
 Example configuration:
 
@@ -52,7 +57,6 @@ default_endpoint = "hac"
 
 [environments.local.endpoints.hac]
 url = "https://localhost:9002"
-username = "admin"
 ignore_ssl = true
 timeout = 30
 
@@ -61,19 +65,16 @@ default_endpoint = "hac-node1"
 
 [environments.production.endpoints.hac-node1]
 url = "https://prod-hac1.example.com:9002"
-username = "admin"
 ignore_ssl = false
 timeout = 60
 
 [environments.production.endpoints.hac-node2]
 url = "https://prod-hac2.example.com:9002"
-username = "admin"
 ignore_ssl = false
 timeout = 60
 
 [environments.production.endpoints.backoffice]
 url = "https://prod-backoffice.example.com"
-username = "admin"
 ignore_ssl = false
 timeout = 60
 ```
@@ -84,10 +85,14 @@ timeout = 60
 # Create an environment
 hac env add production --set-default
 
-# Add endpoints to the environment
-hac endpoint add production hac-node1 --url https://prod-hac1.example.com:9002 --username admin --set-default
-hac endpoint add production hac-node2 --url https://prod-hac2.example.com:9002 --username admin
-hac endpoint add production backoffice --url https://prod-backoffice.example.com --username admin
+# Add endpoints to the environment (infrastructure only, no credentials)
+hac endpoint add production hac-node1 --url https://prod-hac1.example.com:9002 --set-default
+hac endpoint add production hac-node2 --url https://prod-hac2.example.com:9002
+hac endpoint add production backoffice --url https://prod-backoffice.example.com
+
+# Create sessions with authentication (username + password)
+hac session start production --endpoint hac-node1 --username admin
+hac session start production --endpoint hac-node2 --username developer
 
 # List environments and their endpoints
 hac env list
@@ -117,34 +122,37 @@ hac endpoint set-default production hac-node2
 
 **Best Practices:**
 1. Never use `--password` flag in scripts (visible in process list)
-2. Use environment variables for CI/CD: `HAC_PASSWORD` or `HAC_PASSWORD_<ENV>_<ENDPOINT>`
-3. Use stdin for secure scripting: `echo "$PASSWORD" | hac session start <env> --endpoint <ep>`
+2. Use environment variables for CI/CD:
+   - `HAC_USERNAME` or `HAC_USERNAME_<ENV>_<ENDPOINT>`
+   - `HAC_PASSWORD` or `HAC_PASSWORD_<ENV>_<ENDPOINT>`
+3. Use stdin for secure scripting: `echo "$PASSWORD" | hac session start <env> --endpoint <ep> --username <user>`
 4. Clear sessions after use: `hac session clear-all`
 5. Use `--ignore-ssl` only for development/localhost
 6. Rotate passwords regularly and clear old sessions
 7. Use specific endpoints for targeted operations (e.g., specific cluster nodes)
+8. Different users can create separate sessions to the same endpoint
 
 ## Usage
 
 ### Session Management
 
-Before executing commands, you must start a session:
+Before executing commands, you must start a session (authenticate):
 
 ```bash
-# Start session for default endpoint in environment
+# Start session (will prompt for username and password)
 hac session start local
 
-# Start session for specific endpoint
-hac session start production --endpoint hac-node1
+# Start session for specific endpoint with username
+hac session start production --endpoint hac-node1 --username admin
 
-# Password via environment variable
-HAC_PASSWORD=secret hac session start local
+# Username and password via environment variables
+HAC_USERNAME=admin HAC_PASSWORD=secret hac session start local
 
 # Password via stdin
-echo 'secret' | hac session start local
+echo 'secret' | hac session start local --username admin
 
 # Import existing session
-hac session import local --endpoint hac --session-id abc123 --csrf-token def456
+hac session import local --endpoint hac --username admin --session-id abc123 --csrf-token def456
 
 # List active sessions
 hac session list

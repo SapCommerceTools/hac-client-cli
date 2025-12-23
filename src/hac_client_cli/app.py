@@ -38,6 +38,8 @@ def create_client(environment: Optional[str] = None, quiet: bool = False) -> Hac
     Returns:
         Configured HacClient instance
     """
+    from hac_client_core.session import SessionManager
+    
     manager = EnvironmentManager()
     
     # Get environment name
@@ -54,14 +56,23 @@ def create_client(environment: Optional[str] = None, quiet: bool = False) -> Hac
         print("List environments: hac env list", file=sys.stderr)
         raise typer.Exit(1)
     
-    if not env.password:
-        print(f"ERROR: Password not configured for environment '{env_name}'", file=sys.stderr)
-        print(f"Set via config or HAC_PASSWORD_{env_name.upper()} env var", file=sys.stderr)
+    # Check for existing session
+    session_manager = SessionManager()
+    session = session_manager.load_session(env.url, env.username, env_name)
+    
+    if not session:
+        print(f"ERROR: No active session for environment '{env_name}'", file=sys.stderr)
+        print(f"\nStart a session:", file=sys.stderr)
+        print(f"  hac session start {env_name}", file=sys.stderr)
+        print(f"\nOr import existing session:", file=sys.stderr)
+        print(f"  hac session import {env_name} --session-id <id> --csrf-token <token>", file=sys.stderr)
         raise typer.Exit(1)
     
-    auth = BasicAuthHandler(env.username, env.password)
+    # Create client with existing session (no auto-login)
+    # We need a dummy password since BasicAuthHandler requires it, but it won't be used
+    auth = BasicAuthHandler(env.username, "dummy")
     
-    return HacClient(
+    client = HacClient(
         base_url=env.url,
         auth_handler=auth,
         environment=env_name,
@@ -70,6 +81,17 @@ def create_client(environment: Optional[str] = None, quiet: bool = False) -> Hac
         session_persistence=True,
         quiet=quiet
     )
+    
+    # Manually set session info from loaded session
+    from hac_client_core.models import SessionInfo
+    client.session_info = SessionInfo(
+        session_id=session.session_id,
+        csrf_token=session.csrf_token,
+        route_cookie=session.route_cookie,
+        is_authenticated=session.is_authenticated
+    )
+    
+    return client
 
 
 @app.command("groovy")

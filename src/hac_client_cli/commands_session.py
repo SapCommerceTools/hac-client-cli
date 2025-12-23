@@ -2,11 +2,14 @@
 
 import sys
 import json
+import os
 import typer
 from typing import Optional
 from datetime import timedelta
 
 from hac_client_core.session import SessionManager
+from hac_client_core.client import HacClient
+from hac_client_core.auth import BasicAuthHandler
 
 session_app = typer.Typer(help="Manage HAC sessions", no_args_is_help=True)
 
@@ -21,6 +24,158 @@ def format_duration(seconds: float) -> str:
         hours = int(seconds / 3600)
         minutes = int((seconds % 3600) / 60)
         return f"{hours}h {minutes}m"
+
+
+@session_app.command("start")
+def start_session(
+    environment: str = typer.Argument(..., help="Environment name"),
+    password: Optional[str] = typer.Option(None, "--password", "-p", help="Password (or use stdin/env var)")
+):
+    """Start a new HAC session (authenticate and create session).
+    
+    Password can be provided via:
+    - Command option: --password <pass> (not recommended)
+    - Environment variable: HAC_PASSWORD or HAC_PASSWORD_<ENV>
+    - Standard input: echo 'password' | hac session start <env>
+    - Interactive prompt: if none of the above
+    
+    Examples:
+        hac session start local
+        HAC_PASSWORD=secret hac session start local
+        echo 'secret' | hac session start local
+    """
+    try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+        
+        env_manager = EnvironmentManager()
+        env = env_manager.get_environment(environment)
+        
+        if not env:
+            print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
+            raise typer.Exit(1)
+        
+        # Get password from various sources
+        if not password:
+            # Try environment variable
+            env_var_name = f"HAC_PASSWORD_{environment.upper()}"
+            password = os.environ.get(env_var_name) or os.environ.get("HAC_PASSWORD")
+        
+        if not password:
+            # Try stdin (non-interactive)
+            if not sys.stdin.isatty():
+                password = sys.stdin.read().strip()
+        
+        if not password:
+            # Interactive prompt
+            password = typer.prompt("Password", hide_input=True)
+        
+        # Create client and authenticate
+        auth = BasicAuthHandler(env.username, password)
+        client = HacClient(
+            base_url=env.url,
+            auth_handler=auth,
+            environment=environment,
+            timeout=env.timeout,
+            ignore_ssl=env.ignore_ssl,
+            session_persistence=True,
+            quiet=False
+        )
+        
+        # Force login to create session
+        client.login()
+        
+        print(f"✓ Session started for environment '{environment}'")
+        print(f"  User: {env.username}")
+        print(f"  URL: {env.url}")
+    
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        raise typer.Exit(1)
+
+
+@session_app.command("import")
+def import_session(
+    environment: str = typer.Argument(..., help="Environment name"),
+    session_id: Optional[str] = typer.Option(None, "--session-id", help="Session ID (JSESSIONID)"),
+    csrf_token: Optional[str] = typer.Option(None, "--csrf-token", help="CSRF token"),
+    route_cookie: Optional[str] = typer.Option(None, "--route-cookie", help="ROUTE cookie (optional)")
+):
+    """Import an existing HAC session from tokens.
+    
+    Tokens can be provided via:
+    - Command options (not recommended for security)
+    - Environment variables:
+      - HAC_SESSION_ID or HAC_SESSION_ID_<ENV>
+      - HAC_CSRF_TOKEN or HAC_CSRF_TOKEN_<ENV>
+      - HAC_ROUTE_COOKIE or HAC_ROUTE_COOKIE_<ENV>
+    - Standard input (JSON format)
+    
+    Examples:
+        # Via environment variables
+        HAC_SESSION_ID=abc123 HAC_CSRF_TOKEN=def456 hac session import local
+        
+        # Via stdin (JSON)
+        echo '{"session_id":"abc","csrf_token":"def"}' | hac session import local
+        
+        # Via command options
+        hac session import local --session-id abc123 --csrf-token def456
+    """
+    try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+        
+        env_manager = EnvironmentManager()
+        env = env_manager.get_environment(environment)
+        
+        if not env:
+            print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
+            raise typer.Exit(1)
+        
+        # Get tokens from various sources
+        if not session_id or not csrf_token:
+            # Try environment variables
+            env_prefix = environment.upper()
+            session_id = session_id or os.environ.get(f"HAC_SESSION_ID_{env_prefix}") or os.environ.get("HAC_SESSION_ID")
+            csrf_token = csrf_token or os.environ.get(f"HAC_CSRF_TOKEN_{env_prefix}") or os.environ.get("HAC_CSRF_TOKEN")
+            route_cookie = route_cookie or os.environ.get(f"HAC_ROUTE_COOKIE_{env_prefix}") or os.environ.get("HAC_ROUTE_COOKIE")
+        
+        if not session_id or not csrf_token:
+            # Try stdin (JSON)
+            if not sys.stdin.isatty():
+                import json
+                data = json.load(sys.stdin)
+                session_id = session_id or data.get("session_id")
+                csrf_token = csrf_token or data.get("csrf_token")
+                route_cookie = route_cookie or data.get("route_cookie")
+        
+        if not session_id:
+            print("ERROR: Session ID not provided", file=sys.stderr)
+            print("Provide via --session-id, HAC_SESSION_ID env var, or stdin (JSON)", file=sys.stderr)
+            raise typer.Exit(1)
+        
+        if not csrf_token:
+            print("ERROR: CSRF token not provided", file=sys.stderr)
+            print("Provide via --csrf-token, HAC_CSRF_TOKEN env var, or stdin (JSON)", file=sys.stderr)
+            raise typer.Exit(1)
+        
+        # Import session
+        session_manager = SessionManager()
+        session_manager.save_session(
+            base_url=env.url,
+            username=env.username,
+            environment=environment,
+            session_id=session_id,
+            csrf_token=csrf_token,
+            route_cookie=route_cookie
+        )
+        
+        print(f"✓ Session imported for environment '{environment}'")
+        print(f"  User: {env.username}")
+        print(f"  URL: {env.url}")
+        print(f"  Session ID: {session_id[:16]}...")
+    
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        raise typer.Exit(1)
 
 
 @session_app.command("list")

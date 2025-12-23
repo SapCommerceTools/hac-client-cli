@@ -9,7 +9,11 @@ from typing import Optional, Dict, List
 
 @dataclass
 class Environment:
-    """HAC environment configuration."""
+    """HAC environment configuration.
+    
+    Note: Passwords are NEVER stored in environment config.
+    Use 'hac session start' to authenticate and create a session.
+    """
     
     name: str
     """Environment name"""
@@ -19,9 +23,6 @@ class Environment:
     
     username: str
     """Username"""
-    
-    password: Optional[str] = None
-    """Password (optional, can use env var)"""
     
     ignore_ssl: bool = False
     """Ignore SSL certificate errors"""
@@ -78,9 +79,6 @@ class EnvironmentManager:
             lines.append(f'url = "{env_data["url"]}"')
             lines.append(f'username = "{env_data["username"]}"')
             
-            if "password" in env_data and env_data["password"]:
-                lines.append(f'password = "{env_data["password"]}"')
-            
             if env_data.get("ignore_ssl", False):
                 lines.append(f'ignore_ssl = true')
             
@@ -105,17 +103,10 @@ class EnvironmentManager:
             if not isinstance(env_data, dict):
                 continue
             
-            # Get password from config or env var
-            password = env_data.get("password")
-            if not password:
-                env_var_name = f"HAC_PASSWORD_{env_name.upper()}"
-                password = os.environ.get(env_var_name) or os.environ.get("HAC_PASSWORD")
-            
             environments.append(Environment(
                 name=env_name,
                 url=env_data["url"],
                 username=env_data["username"],
-                password=password,
                 ignore_ssl=env_data.get("ignore_ssl", False),
                 timeout=env_data.get("timeout", 30)
             ))
@@ -142,7 +133,6 @@ class EnvironmentManager:
         name: str,
         url: str,
         username: str,
-        password: Optional[str] = None,
         ignore_ssl: bool = False,
         timeout: int = 30,
         set_default: bool = False
@@ -153,7 +143,6 @@ class EnvironmentManager:
             name: Environment name
             url: HAC base URL
             username: Username
-            password: Optional password
             ignore_ssl: Ignore SSL errors
             timeout: HTTP timeout
             set_default: Set as default environment
@@ -176,9 +165,6 @@ class EnvironmentManager:
             "timeout": timeout
         }
         
-        if password:
-            config["environments"][name]["password"] = password
-        
         if set_default or not config.get("default_environment"):
             config["default_environment"] = name
         
@@ -189,7 +175,6 @@ class EnvironmentManager:
         name: str,
         url: Optional[str] = None,
         username: Optional[str] = None,
-        password: Optional[str] = None,
         ignore_ssl: Optional[bool] = None,
         timeout: Optional[int] = None
     ) -> None:
@@ -199,7 +184,6 @@ class EnvironmentManager:
             name: Environment name
             url: New URL (optional)
             username: New username (optional)
-            password: New password (optional)
             ignore_ssl: New SSL setting (optional)
             timeout: New timeout (optional)
             
@@ -217,8 +201,6 @@ class EnvironmentManager:
             env_config["url"] = url
         if username is not None:
             env_config["username"] = username
-        if password is not None:
-            env_config["password"] = password
         if ignore_ssl is not None:
             env_config["ignore_ssl"] = ignore_ssl
         if timeout is not None:

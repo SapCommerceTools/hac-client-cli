@@ -31,6 +31,8 @@ pip install -e .
 
 Configuration file: `~/.config/hac-client/config.toml` (or use `HAC_CLIENT_CONFIG_PATH` env var)
 
+**Note: Passwords are NEVER stored in configuration. Use session management instead.**
+
 Example configuration:
 
 ```toml
@@ -40,15 +42,37 @@ default_environment = "local"
 [environments.local]
 url = "https://localhost:9002"
 username = "admin"
-password = "nimda"
 ignore_ssl = true
+timeout = 30
 
 [environments.dev]
 url = "https://dev.example.com"
 username = "admin"
-# Password can be provided via HAC_PASSWORD env var
 ignore_ssl = false
+timeout = 60
 ```
+
+### Security Considerations
+
+**Password Handling:**
+- Passwords are never stored in config files
+- Passwords are cleared from memory immediately after authentication
+- Use environment variables or stdin for non-interactive scenarios
+- Interactive prompts use `getpass` for secure input
+
+**Session Management:**
+- Sessions are cached with encrypted tokens
+- Session files stored in `~/.cache/hac-client/`
+- Clear sessions when done: `hac session clear <env>`
+- Sessions contain authentication tokens but no passwords
+
+**Best Practices:**
+1. Never use `--password` flag in scripts (visible in process list)
+2. Use environment variables for CI/CD: `HAC_PASSWORD` or `HAC_PASSWORD_<ENV>`
+3. Use stdin for secure scripting: `echo "$PASSWORD" | hac session start`
+4. Clear sessions after use: `hac session clear-all`
+5. Use `--ignore-ssl` only for development/localhost
+6. Rotate passwords regularly and clear old sessions
 
 ## Usage
 

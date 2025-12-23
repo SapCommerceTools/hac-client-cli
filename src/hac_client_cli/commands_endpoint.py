@@ -1,43 +1,86 @@
 """Endpoint management commands for HAC client CLI."""
 
+import sys
+import json
 import typer
 from typing import Optional
+from rich.console import Console
+from rich.table import Table
+
 from .environment_manager import EnvironmentManager
 from .config_loader import get_config_path
 
 
 app = typer.Typer(help="Manage HAC endpoints")
+console = Console()
 
 
 @app.command("list")
 def list_endpoints(
-    environment: str = typer.Argument(..., help="Environment name")
+    environment: str = typer.Argument(..., help="Environment name"),
+    format: str = typer.Option("table", "--format", "-f", help="Output format: table, json"),
+    no_headers: bool = typer.Option(False, "--no-headers", help="Suppress column headers"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Minimal output (names only)")
 ):
     """List all endpoints in an environment."""
     manager = EnvironmentManager(get_config_path())
     
     try:
         endpoints = manager.list_endpoints(environment)
-        
-        if not endpoints:
-            print(f"No endpoints configured for environment '{environment}'")
-            return
-        
         env = manager.get_environment(environment)
         
-        # Tabular format
-        print(f"{'NAME':<20} {'URL':<60} {'SSL':<8} {'TIMEOUT':<10} {'DEFAULT':<8}")
-        print("-" * 108)
+        if not endpoints:
+            if format != "json":
+                console.print(f"[yellow]No endpoints configured for environment '{environment}'[/yellow]")
+            else:
+                print("[]")
+            return
+        
+        # JSON output
+        if format == "json":
+            output = [
+                {
+                    "name": ep.name,
+                    "url": ep.url,
+                    "ignore_ssl": ep.ignore_ssl,
+                    "timeout": ep.timeout,
+                    "is_default": env and ep.name == env.default_endpoint
+                }
+                for ep in endpoints
+            ]
+            print(json.dumps(output, indent=2))
+            return
+        
+        # Quiet output (names only)
+        if quiet:
+            for ep in endpoints:
+                print(ep.name)
+            return
+        
+        # Table format (default)
+        table = Table(show_header=not no_headers)
+        table.add_column("NAME", style="cyan")
+        table.add_column("URL")
+        table.add_column("SSL")
+        table.add_column("TIMEOUT", justify="right")
+        table.add_column("DEFAULT", justify="center")
         
         for endpoint in endpoints:
-            default_marker = "*" if env and endpoint.name == env.default_endpoint else ""
-            ssl_status = "ignore" if endpoint.ignore_ssl else "verify"
-            timeout_str = f"{endpoint.timeout}s"
+            default_marker = "✓" if env and endpoint.name == env.default_endpoint else ""
+            ssl_status = "[yellow]ignore[/yellow]" if endpoint.ignore_ssl else "[green]verify[/green]"
             
-            print(f"{endpoint.name:<20} {endpoint.url:<60} {ssl_status:<8} {timeout_str:<10} {default_marker:<8}")
+            table.add_row(
+                endpoint.name,
+                endpoint.url,
+                ssl_status,
+                f"{endpoint.timeout}s",
+                default_marker
+            )
+        
+        console.print(table)
     
     except ValueError as e:
-        print(f"ERROR: {e}")
+        console.print(f"[red]ERROR: {e}[/red]", file=sys.stderr)
         raise typer.Exit(1)
 
 

@@ -4,15 +4,20 @@ import sys
 import json
 import typer
 from typing import Optional
+from rich.console import Console
+from rich.table import Table
 
 from hac_client_cli.environment_manager import EnvironmentManager
 
 env_app = typer.Typer(help="Manage HAC environments", no_args_is_help=True)
+console = Console()
 
 
 @env_app.command("list")
 def list_environments(
-    json_output: bool = typer.Option(False, "--json", help="Output as JSON")
+    format: str = typer.Option("table", "--format", "-f", help="Output format: table, json"),
+    no_headers: bool = typer.Option(False, "--no-headers", help="Suppress column headers"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Minimal output (names only)")
 ):
     """List all configured environments."""
     try:
@@ -20,14 +25,24 @@ def list_environments(
         environments = manager.list_environments()
         default = manager.get_default_environment()
         
-        if json_output:
+        if not environments:
+            if format != "json":
+                console.print("[yellow]No environments configured[/yellow]")
+                console.print("\nAdd an environment with endpoints:")
+                console.print("  hac env add local")
+                console.print("  hac endpoint add local hac --url https://localhost:9002")
+            else:
+                print("[]")
+            return
+        
+        # JSON output
+        if format == "json":
             output = [
                 {
                     "name": env.name,
                     "endpoints": {
                         ep_name: {
                             "url": ep.url,
-                            "username": ep.username,
                             "ignore_ssl": ep.ignore_ssl,
                             "timeout": ep.timeout
                         }
@@ -39,26 +54,37 @@ def list_environments(
                 for env in environments
             ]
             print(json.dumps(output, indent=2))
-        else:
-            if not environments:
-                print("No environments configured")
-                print("\nAdd an environment with endpoints:")
-                print("  hac env add local")
-                print("  hac endpoint add local hac --url https://localhost:9002 --username admin")
-            else:
-                # Tabular format
-                print(f"{'NAME':<20} {'ENDPOINTS':<12} {'DEFAULT-ENDPOINT':<20} {'DEFAULT':<8}")
-                print("-" * 62)
-                
-                for env in environments:
-                    default_marker = "*" if env.name == default else ""
-                    endpoint_count = str(len(env.endpoints))
-                    default_ep = env.default_endpoint or "-"
-                    
-                    print(f"{env.name:<20} {endpoint_count:<12} {default_ep:<20} {default_marker:<8}")
+            return
+        
+        # Quiet output (names only)
+        if quiet:
+            for env in environments:
+                print(env.name)
+            return
+        
+        # Table format (default)
+        table = Table(show_header=not no_headers)
+        table.add_column("NAME", style="cyan")
+        table.add_column("ENDPOINTS", justify="right")
+        table.add_column("DEFAULT-ENDPOINT")
+        table.add_column("DEFAULT", justify="center")
+        
+        for env in environments:
+            default_marker = "✓" if env.name == default else ""
+            endpoint_count = str(len(env.endpoints))
+            default_ep = env.default_endpoint or "-"
+            
+            table.add_row(
+                env.name,
+                endpoint_count,
+                default_ep,
+                default_marker
+            )
+        
+        console.print(table)
     
     except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
+        console.print(f"[red]ERROR: {e}[/red]", file=sys.stderr)
         raise typer.Exit(1)
 
 

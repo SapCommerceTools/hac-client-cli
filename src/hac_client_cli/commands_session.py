@@ -6,12 +6,15 @@ import os
 import typer
 from typing import Optional
 from datetime import timedelta
+from rich.console import Console
+from rich.table import Table
 
 from hac_client_core.session import SessionManager
 from hac_client_core.client import HacClient
 from hac_client_core.auth import BasicAuthHandler
 
 session_app = typer.Typer(help="Manage HAC sessions", no_args_is_help=True)
+console = Console()
 
 
 def format_duration(seconds: float) -> str:
@@ -233,14 +236,25 @@ def import_session(
 
 @session_app.command("list")
 def list_sessions(
-    json_output: bool = typer.Option(False, "--json", help="Output as JSON")
+    format: str = typer.Option("table", "--format", "-f", help="Output format: table, json"),
+    no_headers: bool = typer.Option(False, "--no-headers", help="Suppress column headers"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Minimal output (environment IDs only)")
 ):
     """List all active sessions."""
     try:
         manager = SessionManager()
         sessions = manager.list_sessions()
         
-        if json_output:
+        if not sessions:
+            if format != "json":
+                console.print("[yellow]No active sessions[/yellow]")
+                console.print("\nCreate a session: hac session start <environment> --username <user>")
+            else:
+                print("[]")
+            return
+        
+        # JSON output
+        if format == "json":
             output = [
                 {
                     "environment": s.environment,
@@ -256,26 +270,41 @@ def list_sessions(
                 for s in sessions
             ]
             print(json.dumps(output, indent=2))
-        else:
-            if not sessions:
-                print("No active sessions")
-                print("\nSessions are created automatically when you execute HAC commands")
-            else:
-                print(f"Active sessions ({len(sessions)}):\n")
-                for s in sessions:
-                    age = format_duration(s.age_seconds)
-                    idle = format_duration(s.idle_seconds)
-                    auth_marker = "✓" if s.is_authenticated else "✗"
-                    
-                    print(f"  {s.environment} @ {s.base_url}")
-                    print(f"    User: {s.username}")
-                    print(f"    Auth: {auth_marker}  Age: {age}  Idle: {idle}")
-                    print(f"    Created: {s.created_at_formatted}")
-                    print(f"    Last used: {s.last_used_at_formatted}")
-                    print()
+            return
+        
+        # Quiet output (environment IDs only)
+        if quiet:
+            for s in sessions:
+                print(s.environment)
+            return
+        
+        # Table format (default)
+        table = Table(show_header=not no_headers)
+        table.add_column("ENVIRONMENT", style="cyan")
+        table.add_column("USERNAME")
+        table.add_column("URL")
+        table.add_column("AUTH", justify="center")
+        table.add_column("AGE", justify="right")
+        table.add_column("IDLE", justify="right")
+        
+        for s in sessions:
+            age = format_duration(s.age_seconds)
+            idle = format_duration(s.idle_seconds)
+            auth_marker = "[green]✓[/green]" if s.is_authenticated else "[red]✗[/red]"
+            
+            table.add_row(
+                s.environment,
+                s.username,
+                s.base_url,
+                auth_marker,
+                age,
+                idle
+            )
+        
+        console.print(table)
     
     except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
+        console.print(f"[red]ERROR: {e}[/red]", file=sys.stderr)
         raise typer.Exit(1)
 
 

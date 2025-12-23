@@ -99,6 +99,13 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
         is_authenticated=session.is_authenticated
     )
     
+    # Also set cookies in the http_session so they're sent with requests
+    client.http_session.cookies.set('JSESSIONID', session.session_id)
+    if session.route_cookie:
+        # Extract value from "ROUTE=value" format
+        route_value = session.route_cookie.split('=', 1)[1] if '=' in session.route_cookie else session.route_cookie
+        client.http_session.cookies.set('ROUTE', route_value)
+    
     return client
 
 

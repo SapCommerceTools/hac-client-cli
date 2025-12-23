@@ -100,11 +100,16 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
     )
     
     # Also set cookies in the http_session so they're sent with requests
-    client.http_session.cookies.set('JSESSIONID', session.session_id)
+    # Extract domain from base URL
+    from urllib.parse import urlparse
+    parsed_url = urlparse(ep_config.url)
+    domain = parsed_url.hostname
+    
+    client.http_session.cookies.set('JSESSIONID', session.session_id, domain=domain, path='/')
     if session.route_cookie:
         # Extract value from "ROUTE=value" format
         route_value = session.route_cookie.split('=', 1)[1] if '=' in session.route_cookie else session.route_cookie
-        client.http_session.cookies.set('ROUTE', route_value)
+        client.http_session.cookies.set('ROUTE', route_value, domain=domain, path='/')
     
     return client
 

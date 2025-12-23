@@ -1,0 +1,2 @@
+"""HAC Client CLI."""
+

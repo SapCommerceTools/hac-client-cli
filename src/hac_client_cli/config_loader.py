@@ -68,6 +68,16 @@ def load_config() -> HacClientConfig:
     # Parse environments
     environments = {}
     for env_name, env_data in config_data.get("environments", {}).items():
+        # Skip if not a dict (e.g., if it's just "default = local")
+        if not isinstance(env_data, dict):
+            continue
+        
+        # Validate required fields
+        if "url" not in env_data:
+            raise ValueError(f"Environment '{env_name}' missing required field 'url'")
+        if "username" not in env_data:
+            raise ValueError(f"Environment '{env_name}' missing required field 'username'")
+        
         # Password can come from config or environment variable
         password = env_data.get("password")
         if not password:

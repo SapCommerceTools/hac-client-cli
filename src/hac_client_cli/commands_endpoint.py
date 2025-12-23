@@ -25,16 +25,16 @@ def list_endpoints(
         
         env = manager.get_environment(environment)
         
-        print(f"Endpoints in environment '{environment}':")
-        print()
+        # Tabular format
+        print(f"{'NAME':<20} {'URL':<60} {'SSL':<8} {'TIMEOUT':<10} {'DEFAULT':<8}")
+        print("-" * 108)
         
         for endpoint in endpoints:
-            default_marker = " (default)" if env and endpoint.name == env.default_endpoint else ""
-            print(f"  {endpoint.name}{default_marker}")
-            print(f"    URL:        {endpoint.url}")
-            print(f"    Ignore SSL: {endpoint.ignore_ssl}")
-            print(f"    Timeout:    {endpoint.timeout}s")
-            print()
+            default_marker = "*" if env and endpoint.name == env.default_endpoint else ""
+            ssl_status = "ignore" if endpoint.ignore_ssl else "verify"
+            timeout_str = f"{endpoint.timeout}s"
+            
+            print(f"{endpoint.name:<20} {endpoint.url:<60} {ssl_status:<8} {timeout_str:<10} {default_marker:<8}")
     
     except ValueError as e:
         print(f"ERROR: {e}")

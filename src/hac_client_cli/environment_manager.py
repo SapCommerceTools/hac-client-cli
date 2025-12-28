@@ -398,7 +398,7 @@ class EnvironmentManager:
             endpoint_name: Endpoint name
             
         Raises:
-            ValueError: If environment doesn't exist, endpoint doesn't exist, or it's the last endpoint
+            ValueError: If environment doesn't exist or endpoint doesn't exist
         """
         config = self._load_config()
         
@@ -410,15 +410,15 @@ class EnvironmentManager:
         if endpoint_name not in env_config.get("endpoints", {}):
             raise ValueError(f"Endpoint '{endpoint_name}' not found in environment '{env_name}'")
         
-        if len(env_config["endpoints"]) == 1:
-            raise ValueError(f"Cannot remove last endpoint from environment '{env_name}'")
-        
         del env_config["endpoints"][endpoint_name]
         
         # Clear default if it was the default endpoint
         if env_config.get("default_endpoint") == endpoint_name:
-            # Set first remaining endpoint as default
-            env_config["default_endpoint"] = next(iter(env_config["endpoints"].keys()))
+            # Set first remaining endpoint as default, or None if no endpoints left
+            if env_config["endpoints"]:
+                env_config["default_endpoint"] = next(iter(env_config["endpoints"].keys()))
+            else:
+                env_config["default_endpoint"] = None
         
         self._save_config(config)
 

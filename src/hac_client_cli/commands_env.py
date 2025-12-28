@@ -165,7 +165,7 @@ def add_environment(
         marker = " (set as default)" if set_default else ""
         print(f"✓ Environment '{name}' added{marker}")
         print(f"\nNext: Add endpoints to this environment")
-        print(f"  hac endpoint add {name} <endpoint-name> --url https://... --username admin")
+        print(f"  hac endpoint add {name} <endpoint-name> --url https://...")
     
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)

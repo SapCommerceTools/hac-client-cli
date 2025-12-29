@@ -179,8 +179,7 @@ def add_environment(
 
 @env_app.command("remove")
 def remove_environment(
-    name: str = typer.Argument(..., help="Environment name"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force removal without confirmation")
+    name: str = typer.Argument(..., help="Environment name")
 ):
     """Remove an environment."""
     try:
@@ -189,12 +188,6 @@ def remove_environment(
         if not manager.get_environment(name):
             print(f"ERROR: Environment '{name}' not found", file=sys.stderr)
             raise typer.Exit(1)
-        
-        if not force:
-            confirm = typer.confirm(f"Remove environment '{name}'?")
-            if not confirm:
-                print("Cancelled")
-                return
         
         manager.remove_environment(name)
         print(f"✓ Environment '{name}' removed")

@@ -566,3 +566,15 @@ body {
   }
 }
 
+
+/* Mermaid diagrams */
+.mermaid-diagram {
+  margin: 1.5rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}

@@ -1393,28 +1393,18 @@ The SAP Commerce HAC web console (hMC/Backoffice/HAC) is powerful — and risky:
 
 ## The Privileged Access Host pattern
 
-\`\`\`
-┌─────────────────────────────────────────────────┐
-│  Operator workstation                           │
-│  (SSH client only — no browser, no HAC access)  │
-└──────────────┬──────────────────────────────────┘
-               │ SSH (MFA + key-based)
-               ▼
-┌─────────────────────────────────────────────────┐
-│  Privileged Access Host (bastion)               │
-│                                                 │
-│  • No GUI / no desktop environment              │
-│  • No internet access (or tightly restricted)   │
-│  • hac CLI installed via pipx                   │
-│  • Full shell session recording (script/auditd) │
-│  • All commands logged with timestamps          │
-│  • Network access only to HAC endpoints         │
-└──────────────┬──────────────────────────────────┘
-               │ HTTPS (internal network only)
-               ▼
-┌─────────────────────────────────────────────────┐
-│  SAP Commerce HAC (9002)                        │
-└─────────────────────────────────────────────────┘
+\`\`\`mermaid
+graph TD
+    A["Operator Workstation<br/>SSH client only — no browser, no HAC access"]
+    B["Privileged Access Host (bastion)<br/>No GUI · No internet · hac CLI via pipx<br/>Full session recording · All commands logged"]
+    C["SAP Commerce HAC :9002"]
+
+    A -->|"SSH (MFA + key-based)"| B
+    B -->|"HTTPS (internal network only)"| C
+
+    style A fill:#45475a,stroke:#585b70,color:#cdd6f4
+    style B fill:#1e66f5,stroke:#585b70,color:#fff
+    style C fill:#40a02b,stroke:#585b70,color:#fff
 \`\`\`
 
 ---

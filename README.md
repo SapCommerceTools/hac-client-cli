@@ -1,8 +1,16 @@
 # HAC Client CLI
 
 Command-line interface for the SAP Commerce HAC (Hybris Administration Console).
+---
 
-**No Python required** — download a single native executable for your platform.
+## Features
+
+- **Groovy** — execute scripts inline or from files, with optional commit mode
+- **FlexibleSearch** — run queries with CSV, JSON, or table output
+- **Impex** — import data with configurable validation
+- **System updates** — list patches, run updates, follow logs
+- **Multi-environment** — manage multiple HAC instances and endpoints
+- **Secure sessions** — passwords never stored; token-based session cache
 
 ---
 
@@ -58,15 +66,6 @@ hac impex -f data.impex
 ```
 
 ---
-
-## Features
-
-- **Groovy** — execute scripts inline or from files, with optional commit mode
-- **FlexibleSearch** — run queries with CSV, JSON, or table output
-- **Impex** — import data with configurable validation
-- **System updates** — list patches, run updates, follow logs
-- **Multi-environment** — manage multiple HAC instances and endpoints
-- **Secure sessions** — passwords never stored; token-based session cache
 
 ## Security
 

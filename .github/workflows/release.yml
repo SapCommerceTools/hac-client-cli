@@ -48,6 +48,7 @@ jobs:
             --noconfirm \
             --collect-submodules hac_client_cli \
             --collect-submodules hac_client_core \
+            --collect-submodules rich \
             --hidden-import hac_client_core \
             --hidden-import hac_client_core.client \
             --hidden-import hac_client_core.auth \

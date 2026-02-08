@@ -123,15 +123,21 @@ Invoke-WebRequest -Uri "https://github.com/SapCommerceTools/hac-client-cli/relea
 
 ---
 
-## Install via pip
+## Install via pipx (recommended if you have Python)
 
-If you already have Python 3.12+:
+[pipx](https://pipx.pypa.io/) installs in an isolated environment and manages PATH automatically — no virtualenv needed:
+
+\`\`\`bash
+pipx install hac-client-cli
+\`\`\`
+
+## Install via pip
 
 \`\`\`bash
 pip install hac-client-cli
 \`\`\`
 
-Or install from source:
+## Install from source
 
 \`\`\`bash
 git clone https://github.com/SapCommerceTools/hac-client-cli.git

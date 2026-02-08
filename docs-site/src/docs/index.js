@@ -24,6 +24,16 @@ export const docsSections = [
     ]
   },
   {
+    title: 'Use Cases',
+    items: [
+      { slug: 'use-case-data-migration', title: 'Data Migration', icon: '🔀' },
+      { slug: 'use-case-data-analysis', title: 'Data Analysis', icon: '📊' },
+      { slug: 'use-case-agentic-coding', title: 'Agentic Coding', icon: '🤖' },
+      { slug: 'use-case-diagnostics', title: 'Diagnostics Automation', icon: '🩺' },
+      { slug: 'use-case-privileged-access', title: 'Privileged Access Host', icon: '🔒' },
+    ]
+  },
+  {
     title: 'Reference',
     items: [
       { slug: 'security', title: 'Security', icon: '🛡️' },
@@ -882,5 +892,642 @@ hac flexsearch "SELECT {pk}, {code} FROM {Product}" --csv > products.csv
 | 1 | Error (authentication failure, query error, etc.) |
 
 All error messages go to stderr, data goes to stdout.
+`,
+  'use-case-data-migration': `# Data Migration
+
+Automate bulk data loading, environment seeding, and cross-system migrations using the CLI.
+
+---
+
+## Environment seeding
+
+Prepare a new environment with reference data from Impex files:
+
+\`\`\`bash
+#!/bin/bash
+set -euo pipefail
+
+ENV="$1"
+echo "$HAC_PASSWORD" | hac session start "$ENV" --username admin
+
+for f in seed/*.impex; do
+  echo "Importing $f ..."
+  hac impex -f "$f" -e "$ENV"
+done
+
+echo "Verifying..."
+hac flexsearch "SELECT COUNT({pk}) FROM {Product}" -e "$ENV" -q
+hac flexsearch "SELECT COUNT({pk}) FROM {Category}" -e "$ENV" -q
+hac flexsearch "SELECT COUNT({pk}) FROM {Media}" -e "$ENV" -q
+
+hac session clear-all --force
+\`\`\`
+
+---
+
+## Cross-environment migration
+
+Extract data from one environment and load it into another:
+
+\`\`\`bash
+# 1. Extract product catalog from staging
+hac flexsearch "SELECT {code}, {name[en]}, {description[en]}, {approvalStatus} FROM {Product}" \
+  -e staging --csv > products.csv
+
+# 2. Generate Impex from CSV (your script or tool)
+python3 csv_to_impex.py products.csv > products.impex
+
+# 3. Import into target
+hac impex -f products.impex -e production
+\`\`\`
+
+---
+
+## Groovy-based migration
+
+For complex migrations where Impex is not flexible enough:
+
+\`\`\`bash
+# Run a migration script that uses the full Hybris API
+hac groovy -f migrations/migrate_product_attributes.groovy --commit -e production
+
+# Verify the migration
+hac flexsearch "SELECT {pk}, {code}, {newAttribute} FROM {Product} WHERE {newAttribute} IS NOT NULL" \
+  -e production --max-count 10
+\`\`\`
+
+---
+
+## Batch import with validation
+
+\`\`\`bash
+#!/bin/bash
+set -euo pipefail
+
+FAILED=0
+for f in import/*.impex; do
+  echo -n "Importing $(basename "$f")... "
+  if hac impex -f "$f" --json 2>/dev/null | jq -e '.success' > /dev/null 2>&1; then
+    echo "OK"
+  else
+    echo "FAILED"
+    FAILED=$((FAILED + 1))
+  fi
+done
+
+if [ "$FAILED" -gt 0 ]; then
+  echo "$FAILED imports failed" >&2
+  exit 1
+fi
+\`\`\`
+
+---
+
+## CI/CD pipeline integration
+
+\`\`\`yaml
+# GitHub Actions step
+- name: Seed environment
+  env:
+    HAC_PASSWORD: \${{ secrets.HAC_PASSWORD }}
+  run: |
+    echo "$HAC_PASSWORD" | hac session start staging --username admin
+    for f in seed/*.impex; do
+      hac impex -f "$f" -e staging
+    done
+    hac session clear-all --force
+\`\`\`
+`,
+
+  'use-case-data-analysis': `# Data Analysis
+
+Use FlexibleSearch to extract data from SAP Commerce and analyse it locally with standard tools.
+
+---
+
+## Ad-hoc queries
+
+\`\`\`bash
+# Quick counts
+hac flexsearch "SELECT COUNT({pk}) FROM {Product}" -q
+hac flexsearch "SELECT COUNT({pk}) FROM {Order} WHERE {date} >= '2025-01-01'" -q
+
+# Export to CSV for spreadsheets
+hac flexsearch "SELECT {code}, {name[en]}, {onlineDate}, {approvalStatus} FROM {Product}" \
+  --csv > products.csv
+\`\`\`
+
+---
+
+## Python + pandas
+
+\`\`\`bash
+hac flexsearch "SELECT {code}, {name[en]}, {price}, {stock} FROM {Product}" --csv > products.csv
+\`\`\`
+
+\`\`\`python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("products.csv", sep="\\t")
+
+# Distribution
+print(df.describe())
+print(df["approvalStatus"].value_counts())
+
+# Price histogram
+df["price"].dropna().hist(bins=30)
+plt.title("Product price distribution")
+plt.savefig("prices.png")
+\`\`\`
+
+---
+
+## JSON + jq
+
+\`\`\`bash
+# Top 10 most expensive products
+hac flexsearch \
+  "SELECT {code}, {name[en]}, {price} FROM {Product} ORDER BY {price} DESC" \
+  --max-count 10 --json | jq '.rows[] | {code: .[0], name: .[1], price: .[2]}'
+
+# Count by approval status
+hac flexsearch \
+  "SELECT {approvalStatus}, COUNT({pk}) FROM {Product} GROUP BY {approvalStatus}" \
+  --json | jq '.rows'
+\`\`\`
+
+---
+
+## Scheduled reporting
+
+\`\`\`bash
+#!/bin/bash
+# daily-report.sh — run via cron
+set -euo pipefail
+
+DATE=$(date +%Y-%m-%d)
+echo "$HAC_PASSWORD" | hac session start production --username reporter
+
+echo "=== Daily Report $DATE ==="
+echo "Products:  $(hac flexsearch "SELECT COUNT({pk}) FROM {Product}" -q -e production)"
+echo "Orders:    $(hac flexsearch "SELECT COUNT({pk}) FROM {Order} WHERE {date} >= '$DATE'" -q -e production)"
+echo "Customers: $(hac flexsearch "SELECT COUNT({pk}) FROM {Customer}" -q -e production)"
+
+hac session clear-all --force
+\`\`\`
+`,
+
+  'use-case-agentic-coding': `# Agentic Coding
+
+The HAC CLI is a natural fit as an **agentic skill** — a tool that AI coding assistants (Copilot, Cursor, Aider, Claude Code, custom agents) can invoke to interact with a live SAP Commerce instance.
+
+---
+
+## Why it works
+
+| Property | Benefit for agents |
+|----------|-------------------|
+| **Structured I/O** | \`--json\` output is trivially parseable — no screen-scraping |
+| **Stateless commands** | Each invocation is independent; no UI state to manage |
+| **stdin/stdout** | Fits the standard tool-call pattern: input → command → structured output |
+| **Exit codes** | 0 = success, 1 = failure — agents can branch on result |
+| **No GUI** | No browser automation, no Selenium, no flaky selectors |
+
+---
+
+## Example: agent skill definition
+
+A typical tool definition an agent can use:
+
+\`\`\`json
+{
+  "name": "hac_flexsearch",
+  "description": "Run a FlexibleSearch query against SAP Commerce and return results as JSON",
+  "parameters": {
+    "query": { "type": "string", "description": "FlexibleSearch SQL query" },
+    "max_count": { "type": "integer", "default": 100 }
+  },
+  "command": "hac flexsearch \"{query}\" --max-count {max_count} --json"
+}
+\`\`\`
+
+\`\`\`json
+{
+  "name": "hac_groovy",
+  "description": "Execute a Groovy script on SAP Commerce HAC and return the result",
+  "parameters": {
+    "script": { "type": "string", "description": "Groovy script source code" },
+    "commit": { "type": "boolean", "default": false }
+  },
+  "command": "hac groovy \"{script}\" --json {commit ? '--commit' : ''}"
+}
+\`\`\`
+
+---
+
+## Agentic workflow example
+
+An agent investigating a failing order:
+
+\`\`\`
+Agent: "Order ORD-12345 failed. Let me check."
+
+→ hac flexsearch "SELECT {pk}, {status}, {date}, {totalPrice} FROM {Order} WHERE {code} = 'ORD-12345'" --json
+← {"rows": [["8796093088769", "PAYMENT_FAILED", "2025-06-15", "149.99"]], ...}
+
+Agent: "Payment failed. Let me check payment transactions."
+
+→ hac flexsearch "SELECT {pk}, {status}, {paymentProvider} FROM {PaymentTransaction} WHERE {order} = 8796093088769" --json
+← {"rows": [["8796093088770", "REJECTED", "stripe"]], ...}
+
+Agent: "Stripe rejected. Let me check the Groovy logs."
+
+→ hac groovy "
+  import de.hybris.platform.payment.model.PaymentTransactionModel
+  def tx = flexibleSearchService.search('SELECT {pk} FROM {PaymentTransaction} WHERE {pk} = 8796093088770').result[0]
+  return [status: tx.status, info: tx.requestId, reason: tx.statusInfo]
+" --json
+← {"execution_result": "{status=REJECTED, info=pi_3N..., reason=card_declined}", ...}
+
+Agent: "Card was declined. The customer's card was rejected by Stripe with reason 'card_declined'."
+\`\`\`
+
+---
+
+## MCP server wrapper
+
+You can wrap the CLI as an [MCP](https://modelcontextprotocol.io/) tool server so any MCP-compatible agent can use it:
+
+\`\`\`python
+# Minimal MCP server exposing hac commands as tools
+import subprocess, json
+
+def hac_flexsearch(query: str, max_count: int = 100) -> dict:
+    result = subprocess.run(
+        ["hac", "flexsearch", query, "--max-count", str(max_count), "--json"],
+        capture_output=True, text=True
+    )
+    return json.loads(result.stdout)
+
+def hac_groovy(script: str, commit: bool = False) -> dict:
+    cmd = ["hac", "groovy", script, "--json"]
+    if commit:
+        cmd.append("--commit")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return json.loads(result.stdout)
+\`\`\`
+
+---
+
+## Best practices for agentic use
+
+1. **Always use \`--json\`** — structured output is essential for parsing
+2. **Limit result sets** — use \`--max-count\` to avoid overwhelming the agent context
+3. **Pre-authenticate** — run \`hac session start\` once before the agent session
+4. **Use read-only by default** — only pass \`--commit\` to Groovy when the agent explicitly needs to write
+5. **Scope access** — use a dedicated user with minimal permissions for agent sessions
+`,
+
+  'use-case-diagnostics': `# Diagnostics Automation
+
+Build diagnostic scripts that collect all relevant data for a specific scenario into a short, actionable report — replacing manual HAC console clicking.
+
+---
+
+## Product visibility diagnostic
+
+Why is a product visible (or not) on the storefront? This script checks every factor:
+
+\`\`\`bash
+#!/bin/bash
+set -euo pipefail
+
+PRODUCT_CODE="$1"
+ENV="\${2:-local}"
+
+echo "=== Product Visibility Diagnostic: $PRODUCT_CODE ==="
+echo ""
+
+# 1. Basic product data
+echo "--- Product Data ---"
+hac flexsearch "
+  SELECT {p.code}, {p.name[en]}, {p.approvalStatus}, {p.onlineDate}, {p.offlineDate},
+         {p.catalogVersion}, {p.supercategories}
+  FROM {Product AS p}
+  WHERE {p.code} = '$PRODUCT_CODE'
+" -e "$ENV"
+
+# 2. Catalog version (must be Online)
+echo ""
+echo "--- Catalog Version ---"
+hac flexsearch "
+  SELECT {cv.version}, {cv.active}, {c.id}
+  FROM {Product AS p
+    JOIN CatalogVersion AS cv ON {p.catalogVersion} = {cv.pk}
+    JOIN Catalog AS c ON {cv.catalog} = {c.pk}}
+  WHERE {p.code} = '$PRODUCT_CODE'
+" -e "$ENV"
+
+# 3. Stock levels
+echo ""
+echo "--- Stock ---"
+hac flexsearch "
+  SELECT {s.productCode}, {s.available}, {s.warehouse}, {s.inStockStatus}
+  FROM {StockLevel AS s}
+  WHERE {s.productCode} = '$PRODUCT_CODE'
+" -e "$ENV"
+
+# 4. Price rows
+echo ""
+echo "--- Prices ---"
+hac flexsearch "
+  SELECT {pr.price}, {pr.currency}, {pr.net}, {pr.startTime}, {pr.endTime}
+  FROM {PriceRow AS pr JOIN Product AS p ON {pr.product} = {p.pk}}
+  WHERE {p.code} = '$PRODUCT_CODE'
+" -e "$ENV"
+
+# 5. Category assignments
+echo ""
+echo "--- Categories ---"
+hac flexsearch "
+  SELECT {c.code}, {c.name[en]}, {cl.linkType}
+  FROM {CategoryProductRelation AS cl
+    JOIN Category AS c ON {cl.source} = {c.pk}
+    JOIN Product AS p ON {cl.target} = {p.pk}}
+  WHERE {p.code} = '$PRODUCT_CODE'
+" -e "$ENV"
+
+# 6. Indexed in Solr?
+echo ""
+echo "--- Solr Index Status ---"
+hac groovy "
+  def query = 'SELECT {pk} FROM {SolrIndexedProperty} WHERE {name} = \\'code\\''
+  def props = flexibleSearchService.search(query).result
+  if (props.isEmpty()) return 'No code indexed property found'
+  return 'Solr indexed properties for code field: ' + props.size()
+" -e "$ENV"
+
+echo ""
+echo "=== End Diagnostic ==="
+\`\`\`
+
+Save as \`diagnose-product.sh\` and run:
+
+\`\`\`bash
+chmod +x diagnose-product.sh
+./diagnose-product.sh PROD-001 production
+\`\`\`
+
+---
+
+## Order diagnostic
+
+Why did an order fail?
+
+\`\`\`bash
+#!/bin/bash
+set -euo pipefail
+
+ORDER_CODE="$1"
+ENV="\${2:-local}"
+
+echo "=== Order Diagnostic: $ORDER_CODE ==="
+
+echo ""
+echo "--- Order ---"
+hac flexsearch "
+  SELECT {code}, {status}, {date}, {totalPrice}, {currency}, {user}
+  FROM {Order}
+  WHERE {code} = '$ORDER_CODE'
+" -e "$ENV"
+
+echo ""
+echo "--- Order Entries ---"
+hac flexsearch "
+  SELECT {oe.entryNumber}, {oe.product}, {oe.quantity}, {oe.basePrice}, {oe.totalPrice}
+  FROM {OrderEntry AS oe JOIN Order AS o ON {oe.order} = {o.pk}}
+  WHERE {o.code} = '$ORDER_CODE'
+" -e "$ENV"
+
+echo ""
+echo "--- Payment Transactions ---"
+hac flexsearch "
+  SELECT {pt.code}, {pt.paymentProvider}, {pt.plannedAmount}, {pt.requestId}
+  FROM {PaymentTransaction AS pt JOIN Order AS o ON {pt.order} = {o.pk}}
+  WHERE {o.code} = '$ORDER_CODE'
+" -e "$ENV"
+
+echo ""
+echo "--- Consignments ---"
+hac flexsearch "
+  SELECT {c.code}, {c.status}, {c.warehouse}, {c.shippingDate}
+  FROM {Consignment AS c JOIN Order AS o ON {c.order} = {o.pk}}
+  WHERE {o.code} = '$ORDER_CODE'
+" -e "$ENV"
+
+echo "=== End Diagnostic ==="
+\`\`\`
+
+---
+
+## Groovy-based deep diagnostic
+
+When FlexibleSearch isn't enough and you need full API access:
+
+\`\`\`bash
+hac groovy "
+  import de.hybris.platform.core.model.product.ProductModel
+
+  def code = '$PRODUCT_CODE'
+  def products = flexibleSearchService.search(
+    'SELECT {pk} FROM {Product} WHERE {code} = ?code',
+    [code: code]
+  ).result
+
+  if (products.isEmpty()) return 'Product not found: ' + code
+
+  def p = modelService.get(products[0]) as ProductModel
+  def report = []
+  report << 'Code: ' + p.code
+  report << 'Name: ' + p.name
+  report << 'Approval: ' + p.approvalStatus
+  report << 'CatalogVersion: ' + p.catalogVersion.version + ' (' + p.catalogVersion.catalog.id + ')'
+  report << 'Online: ' + p.catalogVersion.active
+  report << 'Categories: ' + (p.supercategories?.collect { it.code } ?: [])
+  report << 'OnlineDate: ' + p.onlineDate
+  report << 'OfflineDate: ' + p.offlineDate
+  return report.join('\\n')
+" -e production
+\`\`\`
+
+---
+
+## Tips
+
+- **Save diagnostic scripts** in your team's repository — they become shared operational knowledge
+- **Use \`--json\`** output when feeding results into downstream tools or dashboards
+- **Combine with \`jq\`** for filtering: \`hac flexsearch ... --json | jq '.rows[] | select(.[2] == "APPROVED")'\`
+- **Schedule diagnostics** via cron for periodic health checks
+`,
+
+  'use-case-privileged-access': `# Privileged Access Host
+
+The HAC CLI enables a **Privileged Access Host** pattern — a hardened jump box for SAP Commerce administration that eliminates the need for browser-based HAC access entirely.
+
+---
+
+## The problem with web-based HAC
+
+The SAP Commerce HAC web console (hMC/Backoffice/HAC) is powerful — and risky:
+
+| Risk | Impact |
+|------|--------|
+| **Browser on admin workstations** | Full GUI stack = larger attack surface |
+| **Internet-connected machines** | Exposed to phishing, drive-by downloads, browser exploits |
+| **No session logging** | What was executed? By whom? No audit trail beyond server logs |
+| **Credential exposure** | Password typed into a browser form on a potentially compromised machine |
+| **Copy-paste mistakes** | Groovy scripts, Impex — a wrong paste in a browser can be catastrophic |
+
+---
+
+## The Privileged Access Host pattern
+
+\`\`\`
+┌─────────────────────────────────────────────────┐
+│  Operator workstation                           │
+│  (SSH client only — no browser, no HAC access)  │
+└──────────────┬──────────────────────────────────┘
+               │ SSH (MFA + key-based)
+               ▼
+┌─────────────────────────────────────────────────┐
+│  Privileged Access Host (bastion)               │
+│                                                 │
+│  • No GUI / no desktop environment              │
+│  • No internet access (or tightly restricted)   │
+│  • hac CLI installed via pipx                   │
+│  • Full shell session recording (script/auditd) │
+│  • All commands logged with timestamps          │
+│  • Network access only to HAC endpoints         │
+└──────────────┬──────────────────────────────────┘
+               │ HTTPS (internal network only)
+               ▼
+┌─────────────────────────────────────────────────┐
+│  SAP Commerce HAC (9002)                        │
+└─────────────────────────────────────────────────┘
+\`\`\`
+
+---
+
+## Security benefits
+
+| Aspect | Web HAC | CLI on Privileged Host |
+|--------|---------|----------------------|
+| **Attack surface** | Full browser + GUI stack | Minimal: SSH + CLI binary |
+| **Internet exposure** | Often internet-connected | Air-gapped or tightly restricted |
+| **Session logging** | Limited server-side logs | Full terminal recording (\`script\`, \`auditd\`) |
+| **Credential flow** | Browser form → network | stdin/env var → direct HTTPS |
+| **Reproducibility** | Manual clicks | Scripts in version control |
+| **Access control** | HAC user accounts only | SSH keys + MFA + OS-level ACLs |
+| **Blast radius** | Browser compromise = full access | No GUI, no browser, no clipboard exposure |
+
+---
+
+## Setup
+
+### 1. Provision the bastion host
+
+\`\`\`bash
+# Hardened Linux server — no GUI packages
+sudo apt install --no-install-recommends python3 pipx openssh-server auditd
+
+# Lock down network: only allow SSH in, only HAC endpoints out
+sudo ufw default deny incoming
+sudo ufw default deny outgoing
+sudo ufw allow in ssh
+sudo ufw allow out to 10.0.0.0/8 port 9002 proto tcp  # HAC endpoints
+sudo ufw enable
+\`\`\`
+
+### 2. Install the CLI
+
+\`\`\`bash
+pipx install hac-client-cli
+\`\`\`
+
+### 3. Configure environments
+
+\`\`\`bash
+hac env add production
+hac endpoint add production node1 --url https://10.0.1.10:9002 --set-default
+hac endpoint add production node2 --url https://10.0.1.11:9002
+\`\`\`
+
+### 4. Enable session recording
+
+\`\`\`bash
+# Add to /etc/profile.d/audit-hac.sh
+LOGDIR="/var/log/hac-sessions"
+mkdir -p "$LOGDIR"
+exec script -q -a "$LOGDIR/$(whoami)-$(date +%Y%m%d-%H%M%S).log"
+\`\`\`
+
+Every SSH session is now recorded — every command, every output, with timestamps.
+
+---
+
+## Operational workflow
+
+\`\`\`bash
+# Operator SSHs into bastion
+ssh admin@bastion.internal
+
+# Authenticate (password via env var or password manager)
+export HAC_PASSWORD=$(vault kv get -field=password secret/hac/production)
+echo "$HAC_PASSWORD" | hac session start production --username admin
+unset HAC_PASSWORD
+
+# Run operations — all logged
+hac update data -e production
+hac update run -p Patch_DEPLOY_42 -e production --follow
+hac flexsearch "SELECT COUNT({pk}) FROM {Product}" -e production
+
+# Clean up
+hac session clear-all --force
+exit
+\`\`\`
+
+---
+
+## Audit trail
+
+Because every session is recorded, you get a complete audit trail:
+
+\`\`\`
+$ cat /var/log/hac-sessions/admin-20250615-143022.log
+
+admin@bastion:~$ hac update run -p Patch_DEPLOY_42 -e production --follow
+Running update with patches: Patch_DEPLOY_42
+Update started...
+[14:30:45] Executing Patch_DEPLOY_42...
+[14:31:12] Patch_DEPLOY_42 completed successfully
+admin@bastion:~$ hac flexsearch "SELECT COUNT({pk}) FROM {Product}" -e production
+4,231
+admin@bastion:~$ hac session clear-all --force
+All sessions cleared.
+\`\`\`
+
+Compare this to web HAC: "someone logged in and clicked some buttons."
+
+---
+
+## Compliance alignment
+
+This pattern aligns with:
+
+- **PCI DSS** — privileged access management, audit logging
+- **SOC 2** — access controls, monitoring, least privilege
+- **ISO 27001** — access control policy, operations security
+- **CIS Controls** — controlled use of admin privileges, audit log management
 `
 }

@@ -1398,16 +1398,14 @@ The SAP Commerce HAC web console is powerful — and risky:
 
 \`\`\`mermaid
 graph TD
-    ADM["Admin<br/>Provisions host, starts HAC sessions<br/>Has root/sudo access"]
-    OP["Operator<br/>Personal account · 2FA · limited session<br/>No admin rights · no password access"]
-    B["Privileged Access Host (bastion)<br/>No GUI · No internet · hac CLI via pipx<br/>Session recording · auditd · restricted shell"]
-    C["SAP Commerce HAC :9002"]
+    ADM["<b>Admin</b><br/><i>Provisions host, starts HAC sessions</i><br/>Has root/sudo access"]
+    OP["<b>Operator</b><br/><i>Personal account · 2FA · limited session</i><br/>No admin rights · no password access"]
+    B["<b>Privileged Access Host</b><br/>(bastion)<br/>No GUI · No internet · hac CLI via pipx<br/>Session recording · auditd · restricted shell"]
+    C["<b>SAP Commerce HAC</b> :9002"]
 
-    ADM -->|"SSH (key-based)"| B
-    OP -->|"SSH (personal key + 2FA)"| B
-    B -->|"HTTPS (internal network only)"| C
-
-
+    ADM -- "SSH (key-based)" --> B
+    OP -- "SSH (personal key + 2FA)" --> B
+    B -- "HTTPS (internal network only)" --> C
 \`\`\`
 
 ---

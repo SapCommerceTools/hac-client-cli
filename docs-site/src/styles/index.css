@@ -570,8 +570,12 @@ body {
 /* Mermaid diagrams */
 .mermaid-diagram {
   margin: 1.5rem 0;
+  padding: 2rem 1.5rem;
   text-align: center;
   overflow-x: auto;
+  background: #f5f7fa;
+  border-radius: 12px;
+  border: 1px solid #dce6f0;
 }
 
 .mermaid-diagram svg {

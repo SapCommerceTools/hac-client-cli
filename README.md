@@ -1,240 +1,92 @@
 # HAC Client CLI
 
-Thin command-line interface for SAP Commerce HAC (Hybris Administration Console) operations.
+Command-line interface for the SAP Commerce HAC (Hybris Administration Console).
 
-## Security
+**No Python required** — download a single native executable for your platform.
 
-This CLI implements secure credential handling:
-
-- **No Password Storage**: Passwords are NEVER stored in configuration files or on disk
-- **Explicit Sessions**: Authentication requires explicit `hac session start` command
-- **Memory Clearing**: Passwords are cleared from memory immediately after use
-- **Secure Input**: Passwords via environment variables, stdin, or interactive prompt (not command-line args)
-- **Token Import**: Support for importing existing sessions for automation/CI scenarios
-
-## Overview
-
-This CLI provides basic HAC operations:
-
-- Execute Groovy scripts
-- Run FlexibleSearch queries  
-- Import Impex data
-- Manage environments and credentials
+---
 
 ## Installation
 
-```bash
-pip install -e .
-```
+### Native executable (recommended)
 
-## Configuration
+Download the latest release for your platform from [GitHub Releases](https://github.com/SapCommerceTools/hac-client-cli/releases/latest).
 
-Configuration file: `~/.config/hac-client/config.toml` (or use `HAC_CLIENT_CONFIG_PATH` env var)
+| Platform | Download |
+|----------|----------|
+| Linux x86_64 | [`hac-linux-x86_64`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-linux-x86_64) |
+| macOS Apple Silicon | [`hac-macos-arm64`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-macos-arm64) |
+| macOS Intel | [`hac-macos-x86_64`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-macos-x86_64) |
+| Windows x86_64 | [`hac-windows-x86_64.exe`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe) |
 
-**Note: Passwords are NEVER stored in configuration. Use session management instead.**
-
-### Configuration Model
-
-The configuration separates infrastructure from authentication:
-
-- **Environment**: A logical grouping (e.g., "production", "staging", "local")
-- **Endpoint**: A specific HAC instance/node with URL and connection settings (NO credentials)
-- **Session**: Authentication (username + tokens) for a specific endpoint
-
-This separation means:
-- Multiple users can authenticate to the same endpoint with different credentials
-- Credentials are tied to sessions, not infrastructure configuration
-- The same user can have multiple sessions (different endpoints, different environments)
-
-Example configuration:
-
-```toml
-# Default environment
-default_environment = "local"
-
-[environments.local]
-default_endpoint = "hac"
-
-[environments.local.endpoints.hac]
-url = "https://localhost:9002"
-ignore_ssl = true
-timeout = 30
-
-[environments.production]
-default_endpoint = "hac-node1"
-
-[environments.production.endpoints.hac-node1]
-url = "https://prod-hac1.example.com:9002"
-ignore_ssl = false
-timeout = 60
-
-[environments.production.endpoints.hac-node2]
-url = "https://prod-hac2.example.com:9002"
-ignore_ssl = false
-timeout = 60
-
-[environments.production.endpoints.backoffice]
-url = "https://prod-backoffice.example.com"
-ignore_ssl = false
-timeout = 60
-```
-
-### Managing Environments and Endpoints
+**Linux / macOS:**
 
 ```bash
-# Create an environment
-hac env add production --set-default
-
-# Add endpoints to the environment (infrastructure only, no credentials)
-hac endpoint add production hac-node1 --url https://prod-hac1.example.com:9002 --set-default
-hac endpoint add production hac-node2 --url https://prod-hac2.example.com:9002
-hac endpoint add production backoffice --url https://prod-backoffice.example.com
-
-# Create sessions with authentication (username + password)
-hac session start production --endpoint hac-node1 --username admin
-hac session start production --endpoint hac-node2 --username developer
-
-# List environments and their endpoints
-hac env list
-hac env show production
-hac endpoint list production
-
-# Update an endpoint
-hac endpoint update production hac-node1 --url https://new-url.example.com
-
-# Set default endpoint for an environment
-hac endpoint set-default production hac-node2
+curl -Lo hac https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-linux-x86_64
+chmod +x hac
+sudo mv hac /usr/local/bin/
 ```
 
-### Security Considerations
+**Windows (PowerShell):**
 
-**Password Handling:**
-- Passwords are never stored in config files
-- Passwords are cleared from memory immediately after authentication
-- Use environment variables or stdin for non-interactive scenarios
-- Interactive prompts use `getpass` for secure input
-
-**Session Management:**
-- Sessions are cached with encrypted tokens
-- Session files stored in `~/.cache/hac-client/`
-- Clear sessions when done: `hac session clear <env>`
-- Sessions contain authentication tokens but no passwords
-
-**Best Practices:**
-1. Never use `--password` flag in scripts (visible in process list)
-2. Use environment variables for CI/CD:
-   - `HAC_USERNAME` or `HAC_USERNAME_<ENV>_<ENDPOINT>`
-   - `HAC_PASSWORD` or `HAC_PASSWORD_<ENV>_<ENDPOINT>`
-3. Use stdin for secure scripting: `echo "$PASSWORD" | hac session start <env> --endpoint <ep> --username <user>`
-4. Clear sessions after use: `hac session clear-all`
-5. Use `--ignore-ssl` only for development/localhost
-6. Rotate passwords regularly and clear old sessions
-7. Use specific endpoints for targeted operations (e.g., specific cluster nodes)
-8. Different users can create separate sessions to the same endpoint
-
-## Usage
-
-### Session Management
-
-Before executing commands, you must start a session (authenticate):
-
-```bash
-# Start session (will prompt for username and password)
-hac session start local
-
-# Start session for specific endpoint with username
-hac session start production --endpoint hac-node1 --username admin
-
-# Username and password via environment variables
-HAC_USERNAME=admin HAC_PASSWORD=secret hac session start local
-
-# Password via stdin
-echo 'secret' | hac session start local --username admin
-
-# Import existing session
-hac session import local --endpoint hac --username admin --session-id abc123 --csrf-token def456
-
-# List active sessions
-hac session list
-
-# Clear a session
-hac session clear local/hac
-
-# Clear all sessions
-hac session clear-all
+```powershell
+Invoke-WebRequest -Uri "https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe" -OutFile "$env:LOCALAPPDATA\hac.exe"
 ```
 
-### Groovy Script Execution
+### pip
 
 ```bash
-# Execute inline script (uses default environment/endpoint)
+pip install hac-client-cli
+```
+
+---
+
+## Quick Start
+
+```bash
+# 1. Add an environment
+hac env add local
+hac endpoint add local hac --url https://localhost:9002 --ignore-ssl --set-default
+
+# 2. Authenticate
+echo "nimda" | hac session start local --username admin
+
+# 3. Use it
 hac groovy "return 'Hello World'"
-
-# Execute script from file
-hac groovy -f script.groovy
-
-# Execute with commit mode
-hac groovy -f script.groovy --commit
-
-# Specify environment and endpoint
-hac groovy "return 'test'" -e production -n hac-node1
-```
-
-### FlexibleSearch Queries
-
-```bash
-# Execute query
-hac flexsearch "SELECT {pk} FROM {Product}"
-
-# Limit results
-hac flexsearch "SELECT {pk} FROM {Product}" --max-count 100
-
-# Output as CSV
-hac flexsearch "SELECT {pk} FROM {Product}" --csv
-
-# Specify environment and endpoint
-hac flexsearch "SELECT {pk} FROM {Product}" -e production -n hac-node2
-```
-
-### Impex Import
-
-```bash
-# Import from file
+hac flexsearch "SELECT {pk}, {code} FROM {Product}" --max-count 10
 hac impex -f data.impex
-
-# Import with validation mode
-hac impex -f data.impex --validation strict
-
-# Specify environment and endpoint
-hac impex -f data.impex -e production -n hac-node1
 ```
 
-### Configuration Discovery
+---
 
-```bash
-# Show current configuration
-hac config
+## Features
 
-# List all environments
-hac env list
+- **Groovy** — execute scripts inline or from files, with optional commit mode
+- **FlexibleSearch** — run queries with CSV, JSON, or table output
+- **Impex** — import data with configurable validation
+- **System updates** — list patches, run updates, follow logs
+- **Multi-environment** — manage multiple HAC instances and endpoints
+- **Secure sessions** — passwords never stored; token-based session cache
 
-# Show environment details
-hac env show production
+## Security
 
-# List endpoints in an environment
-hac endpoint list production
+- Passwords are **never** stored in configuration files
+- Authentication requires explicit `hac session start`
+- Passwords cleared from memory after use
+- Supports env vars, stdin, and interactive prompt for credentials
 
-# Show endpoint details
-hac endpoint show production hac-node1
-```
+## Architecture
 
-## Design
-
-This CLI is a thin adapter over `hac-client-core`:
+This CLI is a thin adapter over [`hac-client-core`](https://github.com/SapCommerceTools/hac-client-core):
 
 - Maps command-line arguments to core library calls
-- Handles configuration loading
-- Provides output formatting
-- No business logic, no orchestration
-- Safe for automation and scripting
+- Handles configuration loading and output formatting
+- No business logic — safe for automation and scripting
 
+## Documentation
+
+Full documentation: [sapcommercetools.github.io/hac-client-cli](https://sapcommercetools.github.io/hac-client-cli/)
+
+## License
+
+[MIT](https://github.com/SapCommerceTools/hac-client-cli/blob/main/LICENSE)

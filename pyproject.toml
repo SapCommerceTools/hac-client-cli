@@ -5,15 +5,45 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hac-client-cli"
 version = "0.1.0"
-description = "CLI for SAP Commerce HAC client"
+description = "CLI for SAP Commerce HAC (Hybris Administration Console)"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+authors = [{name = "SapCommerceTools"}]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
+]
 dependencies = [
-    "hac-client-core",
+    "hac-client-core>=0.1.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0",
+    "build",
+    "twine",
 ]
 
 [project.scripts]
 hac = "hac_client_cli.app:main"
 
+[project.urls]
+Homepage = "https://github.com/SapCommerceTools/hac-client-cli"
+Documentation = "https://sapcommercetools.github.io/hac-client-cli/"
+Repository = "https://github.com/SapCommerceTools/hac-client-cli"
+Issues = "https://github.com/SapCommerceTools/hac-client-cli/issues"
+Changelog = "https://github.com/SapCommerceTools/hac-client-cli/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]

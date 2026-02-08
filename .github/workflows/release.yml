@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-executables:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: hac-linux-x86_64
+            pyinstaller_args: ""
+          - os: macos-13
+            artifact: hac-macos-x86_64
+            pyinstaller_args: ""
+          - os: macos-latest
+            artifact: hac-macos-arm64
+            pyinstaller_args: ""
+          - os: windows-latest
+            artifact: hac-windows-x86_64.exe
+            pyinstaller_args: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install .
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller \
+            --onefile \
+            --name hac \
+            --clean \
+            --noconfirm \
+            --collect-submodules hac_client_cli \
+            --collect-submodules hac_client_core \
+            --hidden-import hac_client_core \
+            --hidden-import hac_client_core.client \
+            --hidden-import hac_client_core.auth \
+            --hidden-import hac_client_core.session \
+            --hidden-import hac_client_core.models \
+            src/hac_client_cli/app.py
+        shell: bash
+
+      - name: Rename artifact
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/hac.exe "dist/${{ matrix.artifact }}"
+          else
+            mv dist/hac "dist/${{ matrix.artifact }}"
+          fi
+        shell: bash
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.artifact }}
+
+  publish-pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

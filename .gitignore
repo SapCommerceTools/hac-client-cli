@@ -6,4 +6,15 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.venv/
+*.spec
 
+# PyInstaller
+*.manifest
+*.pem
+
+# docs-site
+docs-site/node_modules/
+docs-site/dist/
+.claude/
+.github/copilot-instructions.md

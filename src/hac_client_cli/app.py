@@ -15,6 +15,7 @@ from hac_client_cli.environment_manager import EnvironmentManager
 from hac_client_cli.commands_env import env_app
 from hac_client_cli.commands_endpoint import app as endpoint_app
 from hac_client_cli.commands_session import session_app
+from hac_client_cli.commands_update import update_app
 from hac_client_core.client import HacClient, HacClientError
 from hac_client_core.auth import BasicAuthHandler
 
@@ -28,6 +29,7 @@ app = typer.Typer(
 app.add_typer(env_app, name="env")
 app.add_typer(endpoint_app, name="endpoint")
 app.add_typer(session_app, name="session")
+app.add_typer(update_app, name="update")
 
 
 def create_client(environment: Optional[str] = None, endpoint: Optional[str] = None, quiet: bool = False) -> HacClient:
@@ -216,7 +218,7 @@ def flexsearch_command(
 @app.command("impex")
 def impex_command(
     file: Path = typer.Option(..., "--file", "-f", help="Impex file to import"),
-    validation: str = typer.Option("strict", "--validation", "-v", help="Validation mode (strict, relaxed, import_relaxed)"),
+    validation: str = typer.Option("import_strict", "--validation", "-v", help="Validation mode (import_strict, import_relaxed, strict, relaxed)"),
     environment: Optional[str] = typer.Option(None, "--environment", "-e", help="Environment name"),
     endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),

@@ -91,8 +91,10 @@ def load_config() -> HacClientConfig:
         endpoints = {}
         endpoints_data = env_data.get("endpoints", {})
         
+        # Skip environments without endpoints - they may be placeholders
+        # Error will be raised when trying to USE such an environment
         if not endpoints_data:
-            raise ValueError(f"Environment '{env_name}' has no endpoints defined")
+            continue
         
         for endpoint_name, endpoint_data in endpoints_data.items():
             if not isinstance(endpoint_data, dict):

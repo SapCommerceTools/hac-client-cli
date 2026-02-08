@@ -1,30 +1,29 @@
 import { Link } from 'react-router-dom'
-import { docsSections } from '../docs/index'
 
 const featuredDocs = [
   {
-    slug: 'complete-workflow',
+    slug: 'installation',
+    icon: '📦',
+    title: 'Installation',
+    description: 'Download a native executable — no Python required. Or install via pip.'
+  },
+  {
+    slug: 'quick-start',
     icon: '🚀',
-    title: 'Complete Workflow',
-    description: 'End-to-end development workflow from scratch creation to publishing. Start here!'
+    title: 'Quick Start',
+    description: 'Set up an environment, authenticate, and run your first commands in under a minute.'
   },
   {
-    slug: 'quick-reference',
-    icon: '⚡',
-    title: 'Quick Reference',
-    description: 'Command cheat sheet for daily operations. Common patterns and shortcuts.'
+    slug: 'configuration',
+    icon: '⚙️',
+    title: 'Configuration',
+    description: 'Manage environments, endpoints, and multi-node setups.'
   },
   {
-    slug: 'docker-network-setup',
-    icon: '🔧',
-    title: 'Docker Network Setup',
-    description: 'Critical setup for .workspace.local DNS resolution and container networking.'
-  },
-  {
-    slug: 'commerce-lifecycle-design',
-    icon: '📐',
-    title: 'Commerce Lifecycle',
-    description: 'Architecture of the commerce CLI tool, Docker strategy, and snapshot system.'
+    slug: 'ci-automation',
+    icon: '🤖',
+    title: 'CI / Automation',
+    description: 'Use the CLI in GitHub Actions, shell scripts, and non-interactive pipelines.'
   }
 ]
 
@@ -32,11 +31,40 @@ function HomePage() {
   return (
     <div className="home-page">
       <section className="home-hero">
-        <h1>SAP Commerce Dev Tools</h1>
+        <h1>HAC Client CLI</h1>
         <p className="subtitle">
-          Modern, modular toolkit for SAP Commerce development, deployment, and publishing.
-          Agent-first automation with human-friendly interfaces.
+          Command-line interface for the SAP Commerce HAC (Hybris Administration Console).
+          Execute Groovy, FlexibleSearch, Impex, and system updates from your terminal.
         </p>
+        <div style={{ marginTop: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Link to="/docs/installation" className="home-card" style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '10px 24px',
+            background: 'var(--accent-primary)',
+            color: '#fff',
+            borderRadius: 'var(--radius-md)',
+            textDecoration: 'none',
+            fontWeight: 600,
+            fontSize: '0.95rem'
+          }}>
+            Get Started →
+          </Link>
+          <a href="https://github.com/SapCommerceTools/hac-client-cli" className="home-card" style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '10px 24px',
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-primary)',
+            borderRadius: 'var(--radius-md)',
+            textDecoration: 'none',
+            fontWeight: 600,
+            fontSize: '0.95rem',
+            border: '1px solid var(--border-subtle)'
+          }}>
+            GitHub ↗
+          </a>
+        </div>
       </section>
 
       <section className="home-cards">
@@ -56,41 +84,7 @@ function HomePage() {
           marginBottom: '24px',
           color: 'var(--text-primary)'
         }}>
-          Quick Links by Role
-        </h2>
-        
-        <div className="home-cards" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          <div className="home-card" style={{ cursor: 'default' }}>
-            <span className="home-card-icon">👩‍💻</span>
-            <h3>New Developers</h3>
-            <p>Start with Complete Workflow, then Docker Network Setup</p>
-          </div>
-          <div className="home-card" style={{ cursor: 'default' }}>
-            <span className="home-card-icon">🤖</span>
-            <h3>Automation Engineers</h3>
-            <p>CLI Design Guide + COMMERCE_WORKSPACE + Quick Reference</p>
-          </div>
-          <div className="home-card" style={{ cursor: 'default' }}>
-            <span className="home-card-icon">🧠</span>
-            <h3>AI Agent Integration</h3>
-            <p>COMMERCE_WORKSPACE + HAC Integration docs</p>
-          </div>
-          <div className="home-card" style={{ cursor: 'default' }}>
-            <span className="home-card-icon">🏗️</span>
-            <h3>System Architects</h3>
-            <p>Lifecycle Design + CLI Guide + Publishing Architecture</p>
-          </div>
-        </div>
-      </section>
-
-      <section style={{ marginTop: '64px' }}>
-        <h2 style={{ 
-          fontSize: '1.5rem', 
-          fontWeight: 600, 
-          marginBottom: '24px',
-          color: 'var(--text-primary)'
-        }}>
-          Tools Overview
+          Commands
         </h2>
         
         <div style={{
@@ -102,38 +96,39 @@ function HomePage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--bg-elevated)' }}>
-                <th style={{ padding: '14px 20px', textAlign: 'left', color: 'var(--text-primary)', fontWeight: 600 }}>Tool</th>
-                <th style={{ padding: '14px 20px', textAlign: 'left', color: 'var(--text-primary)', fontWeight: 600 }}>Purpose</th>
+                <th style={{ padding: '14px 20px', textAlign: 'left', color: 'var(--text-primary)', fontWeight: 600 }}>Command</th>
+                <th style={{ padding: '14px 20px', textAlign: 'left', color: 'var(--text-primary)', fontWeight: 600 }}>Description</th>
               </tr>
             </thead>
             <tbody>
               {[
-                ['scratch', 'Manage scratch branches'],
-                ['checkout', 'Manage Git worktrees'],
-                ['workspace', 'Manage SAP Commerce workspaces'],
-                ['commerce', 'SAP Commerce lifecycle'],
-                ['frontend', 'Frontend lifecycle'],
-                ['proxy', 'Reverse proxy instances'],
-                ['hac', 'HAC API interaction'],
-                ['cch-publish', 'Publishing workflow']
-              ].map(([tool, purpose], i) => (
-                <tr key={tool} style={{ 
+                ['hac groovy', 'Execute Groovy scripts inline or from files'],
+                ['hac flexsearch', 'Run FlexibleSearch queries (table, CSV, JSON)'],
+                ['hac impex', 'Import Impex data with validation modes'],
+                ['hac update', 'System updates, patches, and initialization'],
+                ['hac session', 'Start, import, list, and clear sessions'],
+                ['hac env', 'Manage environments'],
+                ['hac endpoint', 'Manage endpoints within environments'],
+                ['hac config', 'View and validate configuration']
+              ].map(([cmd, desc], i) => (
+                <tr key={cmd} style={{ 
                   borderBottom: i < 7 ? '1px solid var(--border-subtle)' : 'none'
                 }}>
                   <td style={{ 
                     padding: '12px 20px', 
                     fontFamily: 'var(--font-mono)',
                     color: 'var(--accent-primary)',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    whiteSpace: 'nowrap'
                   }}>
-                    {tool}
+                    {cmd}
                   </td>
                   <td style={{ 
                     padding: '12px 20px',
                     color: 'var(--text-secondary)',
                     fontSize: '0.9rem'
                   }}>
-                    {purpose}
+                    {desc}
                   </td>
                 </tr>
               ))}
@@ -141,9 +136,27 @@ function HomePage() {
           </table>
         </div>
       </section>
+
+      <section style={{ marginTop: '64px' }}>
+        <h2 style={{ 
+          fontSize: '1.5rem', 
+          fontWeight: 600, 
+          marginBottom: '16px',
+          color: 'var(--text-primary)'
+        }}>
+          Architecture
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.6 }}>
+          This CLI is a thin adapter over{' '}
+          <a href="https://github.com/SapCommerceTools/hac-client-core" style={{ color: 'var(--accent-primary)' }}>
+            hac-client-core
+          </a>
+          . It maps command-line arguments to core library calls, handles configuration
+          loading and output formatting, and contains no business logic — safe for automation and scripting.
+        </p>
+      </section>
     </div>
   )
 }
 
 export default HomePage
-

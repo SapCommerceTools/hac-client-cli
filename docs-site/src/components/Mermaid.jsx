@@ -3,21 +3,7 @@ import mermaid from 'mermaid'
 
 mermaid.initialize({
   startOnLoad: false,
-  theme: 'base',
-  themeVariables: {
-    darkMode: true,
-    background: 'transparent',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-    fontSize: '14px',
-    primaryColor: '#313244',
-    primaryTextColor: '#f5f5f5',
-    primaryBorderColor: '#6c7086',
-    lineColor: '#9399b2',
-    secondaryColor: '#45475a',
-    tertiaryColor: '#585b70',
-    edgeLabelBackground: '#1e1e2e',
-    nodeTextColor: '#f5f5f5',
-  },
+  theme: 'dark',
 })
 
 let idCounter = 0

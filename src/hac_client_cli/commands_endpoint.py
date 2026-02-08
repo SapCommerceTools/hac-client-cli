@@ -4,15 +4,13 @@ import sys
 import json
 import typer
 from typing import Optional
-from rich.console import Console
-from rich.table import Table
-
-from .environment_manager import EnvironmentManager
-from .config_loader import get_config_path
-
 
 app = typer.Typer(help="Manage HAC endpoints")
-console = Console()
+
+
+def _console():
+    from rich.console import Console
+    return Console()
 
 
 @app.command("list")
@@ -23,6 +21,9 @@ def list_endpoints(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Minimal output (names only)")
 ):
     """List all endpoints in an environment."""
+    from .environment_manager import EnvironmentManager
+    from .config_loader import get_config_path
+
     manager = EnvironmentManager(get_config_path())
     
     try:
@@ -31,7 +32,7 @@ def list_endpoints(
         
         if not endpoints:
             if format != "json":
-                console.print(f"[yellow]No endpoints configured for environment '{environment}'[/yellow]")
+                _console().print(f"[yellow]No endpoints configured for environment '{environment}'[/yellow]")
             else:
                 print("[]")
             return
@@ -58,6 +59,8 @@ def list_endpoints(
             return
         
         # Table format (default)
+        from rich.table import Table
+
         table = Table(show_header=not no_headers)
         table.add_column("NAME", style="cyan")
         table.add_column("URL")
@@ -77,10 +80,10 @@ def list_endpoints(
                 default_marker
             )
         
-        console.print(table)
+        _console().print(table)
     
     except ValueError as e:
-        console.print(f"[red]ERROR: {e}[/red]", file=sys.stderr)
+        print(f"ERROR: {e}", file=sys.stderr)
         raise typer.Exit(1)
 
 
@@ -90,6 +93,9 @@ def show_endpoint(
     endpoint: str = typer.Argument(..., help="Endpoint name")
 ):
     """Show details of a specific endpoint."""
+    from .environment_manager import EnvironmentManager
+    from .config_loader import get_config_path
+
     manager = EnvironmentManager(get_config_path())
     
     ep = manager.get_endpoint(environment, endpoint)
@@ -124,6 +130,9 @@ def add_endpoint(
     Note: Username is provided during session creation, not endpoint configuration.
     An endpoint is just infrastructure (URL, connection settings).
     """
+    from .environment_manager import EnvironmentManager
+    from .config_loader import get_config_path
+
     manager = EnvironmentManager(get_config_path())
     
     try:
@@ -137,7 +146,7 @@ def add_endpoint(
         )
         
         default_msg = " (set as default)" if set_default else ""
-        print(f"✓ Added endpoint '{endpoint}' to environment '{environment}'{default_msg}")
+        print(f"Added endpoint '{endpoint}' to environment '{environment}'{default_msg}")
         print(f"\nStart session: hac session start {environment} --endpoint {endpoint} --username <user>")
     
     except ValueError as e:
@@ -154,6 +163,9 @@ def update_endpoint(
     timeout: Optional[int] = typer.Option(None, "--timeout", help="HTTP timeout in seconds")
 ):
     """Update an existing endpoint."""
+    from .environment_manager import EnvironmentManager
+    from .config_loader import get_config_path
+
     manager = EnvironmentManager(get_config_path())
     
     try:
@@ -165,7 +177,7 @@ def update_endpoint(
             timeout=timeout
         )
         
-        print(f"✓ Updated endpoint '{endpoint}' in environment '{environment}'")
+        print(f"Updated endpoint '{endpoint}' in environment '{environment}'")
     
     except ValueError as e:
         print(f"ERROR: {e}")
@@ -178,11 +190,14 @@ def remove_endpoint(
     endpoint: str = typer.Argument(..., help="Endpoint name")
 ):
     """Remove an endpoint from an environment."""
+    from .environment_manager import EnvironmentManager
+    from .config_loader import get_config_path
+
     manager = EnvironmentManager(get_config_path())
     
     try:
         manager.remove_endpoint(environment, endpoint)
-        print(f"✓ Removed endpoint '{endpoint}' from environment '{environment}'")
+        print(f"Removed endpoint '{endpoint}' from environment '{environment}'")
     
     except ValueError as e:
         print(f"ERROR: {e}")
@@ -195,13 +210,15 @@ def set_default_endpoint(
     endpoint: str = typer.Argument(..., help="Endpoint name to set as default")
 ):
     """Set the default endpoint for an environment."""
+    from .environment_manager import EnvironmentManager
+    from .config_loader import get_config_path
+
     manager = EnvironmentManager(get_config_path())
     
     try:
         manager.set_default_endpoint(environment, endpoint)
-        print(f"✓ Set '{endpoint}' as default endpoint for environment '{environment}'")
+        print(f"Set '{endpoint}' as default endpoint for environment '{environment}'")
     
     except ValueError as e:
         print(f"ERROR: {e}")
         raise typer.Exit(1)
-

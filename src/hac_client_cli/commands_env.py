@@ -4,13 +4,13 @@ import sys
 import json
 import typer
 from typing import Optional
-from rich.console import Console
-from rich.table import Table
-
-from hac_client_cli.environment_manager import EnvironmentManager
 
 env_app = typer.Typer(help="Manage HAC environments", no_args_is_help=True)
-console = Console()
+
+
+def _console():
+    from rich.console import Console
+    return Console()
 
 
 @env_app.command("list")
@@ -21,12 +21,15 @@ def list_environments(
 ):
     """List all configured environments."""
     try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+
         manager = EnvironmentManager()
         environments = manager.list_environments()
         default = manager.get_default_environment()
         
         if not environments:
             if format != "json":
+                console = _console()
                 console.print("[yellow]No environments configured[/yellow]")
                 console.print("\nAdd an environment with endpoints:")
                 console.print("  hac env add local")
@@ -63,6 +66,8 @@ def list_environments(
             return
         
         # Table format (default)
+        from rich.table import Table
+
         table = Table(show_header=not no_headers)
         table.add_column("NAME", style="cyan")
         table.add_column("ENDPOINTS", justify="right")
@@ -81,10 +86,10 @@ def list_environments(
                 default_marker
             )
         
-        console.print(table)
+        _console().print(table)
     
     except Exception as e:
-        console.print(f"[red]ERROR: {e}[/red]", file=sys.stderr)
+        print(f"ERROR: {e}", file=sys.stderr)
         raise typer.Exit(1)
 
 
@@ -95,6 +100,8 @@ def show_environment(
 ):
     """Show details of a specific environment with all endpoints."""
     try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+
         manager = EnvironmentManager()
         env = manager.get_environment(name)
         
@@ -156,6 +163,8 @@ def add_environment(
 ):
     """Add a new environment (add endpoints separately with 'hac endpoint add')."""
     try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+
         manager = EnvironmentManager()
         manager.add_environment(
             name=name,
@@ -163,7 +172,7 @@ def add_environment(
         )
         
         marker = " (set as default)" if set_default else ""
-        print(f"✓ Environment '{name}' added{marker}")
+        print(f"Environment '{name}' added{marker}")
         print(f"\nNext: Add endpoints to this environment")
         print(f"  hac endpoint add {name} <endpoint-name> --url https://...")
     
@@ -175,14 +184,14 @@ def add_environment(
         raise typer.Exit(1)
 
 
-
-
 @env_app.command("remove")
 def remove_environment(
     name: str = typer.Argument(..., help="Environment name")
 ):
     """Remove an environment."""
     try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+
         manager = EnvironmentManager()
         
         if not manager.get_environment(name):
@@ -190,7 +199,7 @@ def remove_environment(
             raise typer.Exit(1)
         
         manager.remove_environment(name)
-        print(f"✓ Environment '{name}' removed")
+        print(f"Environment '{name}' removed")
     
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -206,9 +215,11 @@ def set_default(
 ):
     """Set the default environment."""
     try:
+        from hac_client_cli.environment_manager import EnvironmentManager
+
         manager = EnvironmentManager()
         manager.set_default_environment(name)
-        print(f"✓ Default environment set to '{name}'")
+        print(f"Default environment set to '{name}'")
     
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -216,4 +227,3 @@ def set_default(
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         raise typer.Exit(1)
-

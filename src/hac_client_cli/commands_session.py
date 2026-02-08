@@ -5,16 +5,13 @@ import json
 import os
 import typer
 from typing import Optional
-from datetime import timedelta
-from rich.console import Console
-from rich.table import Table
-
-from hac_client_core.session import SessionManager
-from hac_client_core.client import HacClient
-from hac_client_core.auth import BasicAuthHandler
 
 session_app = typer.Typer(help="Manage HAC sessions", no_args_is_help=True)
-console = Console()
+
+
+def _console():
+    from rich.console import Console
+    return Console()
 
 
 def format_duration(seconds: float) -> str:
@@ -57,6 +54,8 @@ def start_session(
     """
     try:
         from hac_client_cli.config_loader import get_endpoint_config
+        from hac_client_core.client import HacClient
+        from hac_client_core.auth import BasicAuthHandler
         
         # Get endpoint configuration
         env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
@@ -66,7 +65,6 @@ def start_session(
         
         # Get username from various sources
         if not username:
-            # Try environment variable (specific to env/endpoint, then env, then generic)
             env_ep_var = f"HAC_USERNAME_{env_name.upper()}_{endpoint_name.upper()}"
             env_var = f"HAC_USERNAME_{env_name.upper()}"
             username = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_USERNAME")
@@ -81,13 +79,11 @@ def start_session(
         
         # Get password from various sources
         if not password:
-            # Try environment variable (specific to env/endpoint, then env, then generic)
             env_ep_var = f"HAC_PASSWORD_{env_name.upper()}_{endpoint_name.upper()}"
             env_var = f"HAC_PASSWORD_{env_name.upper()}"
             password = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_PASSWORD")
         
         if not password:
-            # Try stdin (non-interactive)
             if not sys.stdin.isatty():
                 password = sys.stdin.read().strip()
         
@@ -100,27 +96,24 @@ def start_session(
             raise typer.Exit(1)
         
         try:
-            # Create client and authenticate
             auth = BasicAuthHandler(username, password)
             client = HacClient(
                 base_url=ep_config.url,
                 auth_handler=auth,
-                environment=session_id,  # Use composite key
+                environment=session_id,
                 timeout=ep_config.timeout,
                 ignore_ssl=ep_config.ignore_ssl,
                 session_persistence=True,
                 quiet=False
             )
             
-            # Force login to create session
             client.login()
             
-            print(f"✓ Session started for '{session_id}'")
+            print(f"Session started for '{session_id}'")
             print(f"  User: {username}")
             print(f"  URL: {ep_config.url}")
         
         finally:
-            # Clear password from memory immediately
             if password:
                 password = None
                 del password
@@ -165,6 +158,7 @@ def import_session(
     """
     try:
         from hac_client_cli.config_loader import get_endpoint_config
+        from hac_client_core.session import SessionManager
         
         # Get endpoint configuration
         env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
@@ -174,16 +168,13 @@ def import_session(
         
         # Get username from various sources
         if not username:
-            # Try environment variables
             env_ep_var = f"HAC_USERNAME_{env_name.upper()}_{endpoint_name.upper()}"
             env_var = f"HAC_USERNAME_{env_name.upper()}"
             username = os.environ.get(env_ep_var) or os.environ.get(env_var) or os.environ.get("HAC_USERNAME")
         
         # Get tokens from various sources
         if not session_id or not csrf_token or not username:
-            # Try stdin (JSON)
             if not sys.stdin.isatty():
-                import json
                 data = json.load(sys.stdin)
                 username = username or data.get("username")
                 session_id = session_id or data.get("session_id")
@@ -191,7 +182,6 @@ def import_session(
                 route_cookie = route_cookie or data.get("route_cookie")
         
         if not session_id or not csrf_token:
-            # Try environment variables
             env_ep_prefix = f"{env_name.upper()}_{endpoint_name.upper()}"
             env_prefix = env_name.upper()
             session_id = session_id or os.environ.get(f"HAC_SESSION_ID_{env_ep_prefix}") or os.environ.get(f"HAC_SESSION_ID_{env_prefix}") or os.environ.get("HAC_SESSION_ID")
@@ -218,13 +208,13 @@ def import_session(
         session_manager.save_session(
             base_url=ep_config.url,
             username=username,
-            environment=sess_id,  # Use composite key
+            environment=sess_id,
             session_id=session_id,
             csrf_token=csrf_token,
             route_cookie=route_cookie
         )
         
-        print(f"✓ Session imported for '{sess_id}'")
+        print(f"Session imported for '{sess_id}'")
         print(f"  User: {username}")
         print(f"  URL: {ep_config.url}")
         print(f"  Session ID: {session_id[:16]}...")
@@ -242,11 +232,14 @@ def list_sessions(
 ):
     """List all active sessions."""
     try:
+        from hac_client_core.session import SessionManager
+
         manager = SessionManager()
         sessions = manager.list_sessions()
         
         if not sessions:
             if format != "json":
+                console = _console()
                 console.print("[yellow]No active sessions[/yellow]")
                 console.print("\nCreate a session: hac session start <environment> --username <user>")
             else:
@@ -279,6 +272,8 @@ def list_sessions(
             return
         
         # Table format (default)
+        from rich.table import Table
+
         table = Table(show_header=not no_headers)
         table.add_column("ENVIRONMENT", style="cyan")
         table.add_column("USERNAME")
@@ -301,10 +296,10 @@ def list_sessions(
                 idle
             )
         
-        console.print(table)
+        _console().print(table)
     
     except Exception as e:
-        console.print(f"[red]ERROR: {e}[/red]", file=sys.stderr)
+        print(f"ERROR: {e}", file=sys.stderr)
         raise typer.Exit(1)
 
 
@@ -316,7 +311,8 @@ def show_session(
     """Show details of a specific session."""
     try:
         from hac_client_cli.environment_manager import EnvironmentManager
-        
+        from hac_client_core.session import SessionManager
+
         env_manager = EnvironmentManager()
         env = env_manager.get_environment(environment)
         
@@ -349,7 +345,7 @@ def show_session(
         else:
             age = format_duration(session.age_seconds)
             idle = format_duration(session.idle_seconds)
-            auth_marker = "✓ authenticated" if session.is_authenticated else "✗ not authenticated"
+            auth_marker = "authenticated" if session.is_authenticated else "not authenticated"
             
             print(f"Session: {session.environment}")
             print(f"  URL: {session.base_url}")
@@ -376,7 +372,8 @@ def clear_session(
     """Clear session for a specific environment."""
     try:
         from hac_client_cli.environment_manager import EnvironmentManager
-        
+        from hac_client_core.session import SessionManager
+
         env_manager = EnvironmentManager()
         env = env_manager.get_environment(environment)
         
@@ -387,7 +384,7 @@ def clear_session(
         session_manager = SessionManager()
         session_manager.remove_session(env.url, env.username, environment)
         
-        print(f"✓ Session cleared for environment '{environment}'")
+        print(f"Session cleared for environment '{environment}'")
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -406,12 +403,13 @@ def clear_all_sessions(
                 print("Cancelled")
                 return
         
+        from hac_client_core.session import SessionManager
+
         session_manager = SessionManager()
         count = session_manager.clear_all_sessions()
         
-        print(f"✓ Cleared {count} session(s)")
+        print(f"Cleared {count} session(s)")
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         raise typer.Exit(1)
-

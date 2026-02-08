@@ -10,14 +10,13 @@ from typing import Optional
 from html import unescape
 
 import typer
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
 
 update_app = typer.Typer(help="System update and initialization", no_args_is_help=True)
-console = Console()
-err_console = Console(stderr=True)
+
+
+def _console(stderr: bool = False):
+    from rich.console import Console
+    return Console(stderr=stderr)
 
 
 def _is_tty() -> bool:
@@ -27,29 +26,24 @@ def _is_tty() -> bool:
 
 def _html_to_text(html: str) -> str:
     """Convert HTML log to plain text."""
-    # Replace HTML breaks with newlines
     text = html.replace('<br/>', '\n').replace('<br>', '\n')
-    # Remove HTML tags
     text = re.sub(r'<[^>]+>', '', text)
-    # Decode HTML entities
     text = unescape(text)
-    # Clean up multiple newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
 
-def _html_to_rich(html: str) -> Text:
+def _html_to_rich(html: str):
     """Convert HTML log to Rich Text with formatting."""
+    from rich.text import Text
+
     text = Text()
     
-    # Process line by line for better control
     lines = html.split('<br/>')
     lines = [l.replace('<br>', '') for line in lines for l in line.split('<br>')]
     
     for line in lines:
-        # Check for headers
         if '<h3>' in line:
-            # Extract header text
             header_text = re.sub(r'</?h3>', '', line)
             header_text = re.sub(r'<[^>]+>', '', header_text)
             header_text = unescape(header_text).strip()
@@ -57,14 +51,12 @@ def _html_to_rich(html: str) -> Text:
                 text.append(f"\n{header_text}\n", style="bold cyan")
             continue
         
-        # Remove other HTML tags
         plain_line = re.sub(r'<[^>]+>', '', line)
         plain_line = unescape(plain_line)
         
         if not plain_line.strip():
             continue
         
-        # Style based on content
         if '>>>' in plain_line:
             text.append(plain_line + '\n', style="green")
         elif 'error' in plain_line.lower() or 'exception' in plain_line.lower():
@@ -103,18 +95,19 @@ def list_update_data(
         client = create_client(environment, endpoint, quiet=True)
         data = client.get_update_data()
         
+        console = _console()
+        err_console = _console(stderr=True)
+        
         if data.is_initializing:
             if not json_output:
-                console.print("[yellow]⚠ System is currently initializing[/yellow]")
+                console.print("[yellow]System is currently initializing[/yellow]")
         
-        # Filter extensions
         extensions = data.project_datas
         if patches_only:
             extensions = [e for e in extensions if 'patch' in e.name.lower()]
         elif with_params:
             extensions = data.extensions_with_parameters
         
-        # Show specific extension
         if extension:
             ext = data.get_extension(extension)
             if not ext:
@@ -139,7 +132,6 @@ def list_update_data(
                 }
                 print(json.dumps(output, indent=2))
             elif quiet or not _is_tty():
-                # Plain tabular output for piping
                 for p in ext.parameters:
                     selected = p.selected_value or ""
                     values_str = ",".join(p.available_values)
@@ -154,14 +146,13 @@ def list_update_data(
                     for p in ext.parameters:
                         selected = p.selected_value or "none"
                         values_str = ", ".join(p.available_values)
-                        console.print(f"    • {p.label} ({p.name})")
+                        console.print(f"    {p.label} ({p.name})")
                         console.print(f"      Values: {values_str}")
                         console.print(f"      Selected: [green]{selected}[/green]")
                 else:
                     console.print("  [dim]No configurable parameters[/dim]")
             return
         
-        # JSON output
         if json_output:
             output = {
                 "is_initializing": data.is_initializing,
@@ -185,14 +176,14 @@ def list_update_data(
             print(json.dumps(output, indent=2))
             return
         
-        # Quiet output
         if quiet:
             for e in extensions:
                 print(e.name)
             return
         
-        # Table output (TTY)
         if _is_tty():
+            from rich.table import Table
+
             table = Table(title="Available Extensions")
             table.add_column("Extension", style="cyan")
             table.add_column("Parameters", justify="right")
@@ -215,7 +206,6 @@ def list_update_data(
             if data.extensions_with_parameters:
                 console.print(f"With parameters: {len(data.extensions_with_parameters)}")
         else:
-            # Plain output for piping
             for e in extensions:
                 if e.has_parameters:
                     params = ",".join([f"{p.name}={p.selected_value}" for p in e.parameters])
@@ -224,7 +214,7 @@ def list_update_data(
                     print(e.name)
     
     except Exception as e:
-        err_console.print(f"[red]ERROR: {e}[/red]")
+        _console(stderr=True).print(f"[red]ERROR: {e}[/red]")
         raise typer.Exit(1)
 
 
@@ -254,7 +244,9 @@ def list_patches(
         client = create_client(environment, endpoint, quiet=True)
         data = client.get_update_data()
         
-        # Find patches extension
+        console = _console()
+        err_console = _console(stderr=True)
+        
         if extension:
             patches_ext = data.get_extension(extension)
             if not patches_ext:
@@ -272,7 +264,6 @@ def list_patches(
         
         patches = patches_ext.parameters
         
-        # JSON output
         if json_output:
             output = {
                 "extension": patches_ext.name,
@@ -289,14 +280,15 @@ def list_patches(
             print(json.dumps(output, indent=2))
             return
         
-        # Quiet output
         if quiet:
             for p in patches:
                 print(p.name)
             return
         
-        # Table output
         if _is_tty():
+            from rich.table import Table
+            from rich.text import Text
+
             table = Table(title=f"Patches ({patches_ext.name})")
             table.add_column("Patch", style="cyan")
             table.add_column("Status", justify="center")
@@ -306,21 +298,20 @@ def list_patches(
                 is_applied = p.selected_value == "yes"
                 if is_applied:
                     applied_count += 1
-                    status = Text("✓ applied", style="green")
+                    status = Text("applied", style="green")
                 else:
-                    status = Text("○ pending", style="yellow")
+                    status = Text("pending", style="yellow")
                 table.add_row(p.name, status)
             
             console.print(table)
             console.print(f"\nTotal: {len(patches)} patches ({applied_count} applied, {len(patches) - applied_count} pending)")
         else:
-            # Plain output - show status as applied/pending
             for p in patches:
                 status = "applied" if p.selected_value == "yes" else "pending"
                 print(f"{p.name}\t{status}")
     
     except Exception as e:
-        err_console.print(f"[red]ERROR: {e}[/red]")
+        _console(stderr=True).print(f"[red]ERROR: {e}[/red]")
         raise typer.Exit(1)
 
 
@@ -357,21 +348,20 @@ def run_update(
         
         client = create_client(environment, endpoint, quiet=True)
         
-        # Get all update data to include all extension parameters
+        console = _console()
+        err_console = _console(stderr=True)
+        
         data = client.get_update_data()
         
-        # Build parameters - include ALL extension parameters with their current values
         all_parameters = {}
         for ext in data.project_datas:
             for p in ext.parameters:
                 param_key = f"{ext.name}_{p.name}"
-                # Use current selected value or first available value
                 if p.selected_value:
                     all_parameters[param_key] = [p.selected_value]
                 elif p.available_values:
                     all_parameters[param_key] = [p.available_values[0]]
         
-        # Handle patches - override specific patch parameters
         if patch:
             if extension:
                 patches_ext = data.get_extension(extension)
@@ -384,14 +374,11 @@ def run_update(
             if patches_ext:
                 ext_name = patches_ext.name
                 
-                # Enable the extension's sample checkbox - this triggers running patches
                 all_parameters[f"{ext_name}_sample"] = "true"
                 
-                # Set all patches to "no" by default
                 for p in patches_ext.parameters:
                     all_parameters[f"{ext_name}_{p.name}"] = ["no"]
                 
-                # Enable requested patches
                 for p_name in patch:
                     param_key = f"{ext_name}_{p_name}"
                     matching_patch = next((pp for pp in patches_ext.parameters if pp.name == p_name), None)
@@ -402,7 +389,6 @@ def run_update(
             else:
                 err_console.print("[yellow]Warning: No patches extension found. Use --extension to specify.[/yellow]")
         
-        # Handle direct parameters
         if param:
             for p in param:
                 if '=' not in p:
@@ -416,9 +402,8 @@ def run_update(
             if patch:
                 console.print(f"  Patches: {', '.join(patch)}")
             if drop_tables:
-                console.print("[bold red]  ⚠ DROP TABLES ENABLED[/bold red]")
+                console.print("[bold red]  DROP TABLES ENABLED[/bold red]")
         
-        # Execute update
         result = client.execute_update(
             all_parameters=all_parameters,
             drop_tables=drop_tables,
@@ -438,7 +423,6 @@ def run_update(
                     console.print(rich_text)
             raise typer.Exit(1)
         
-        # Show result
         if json_output:
             print(json.dumps({
                 "success": result.success,
@@ -448,20 +432,19 @@ def run_update(
         elif quiet or not _is_tty():
             print(result.log_text)
         else:
-            console.print("[green]✓ Update completed[/green]")
+            console.print("[green]Update completed[/green]")
             if result.log_html:
                 console.print()
                 rich_text = _html_to_rich(result.log_html)
                 console.print(rich_text)
         
-        # If not finished yet (long-running update), follow the log
         if follow and not result.is_finished:
             if not quiet and not json_output:
                 console.print("\n[bold]Waiting for update to complete...[/bold]")
             _follow_log(client, json_output, quiet)
     
     except Exception as e:
-        err_console.print(f"[red]ERROR: {e}[/red]")
+        _console(stderr=True).print(f"[red]ERROR: {e}[/red]")
         raise typer.Exit(1)
 
 
@@ -485,6 +468,8 @@ def show_log(
         
         client = create_client(environment, endpoint, quiet=True)
         
+        console = _console()
+        
         if follow:
             _follow_log(client, json_output, quiet)
         else:
@@ -499,42 +484,38 @@ def show_log(
             elif quiet or not _is_tty():
                 print(log.log_text)
             else:
+                from rich.panel import Panel
+
                 rich_text = _html_to_rich(log.log_html)
                 console.print(Panel(rich_text, title="Update Log"))
                 
                 if log.is_complete:
                     if log.has_errors:
-                        console.print("[bold red]✗ Update completed with errors[/bold red]")
+                        console.print("[bold red]Update completed with errors[/bold red]")
                     else:
-                        console.print("[bold green]✓ Update completed[/bold green]")
+                        console.print("[bold green]Update completed[/bold green]")
     
     except Exception as e:
-        err_console.print(f"[red]ERROR: {e}[/red]")
+        _console(stderr=True).print(f"[red]ERROR: {e}[/red]")
         raise typer.Exit(1)
 
 
 def _follow_log(client, json_output: bool, quiet: bool):
-    """Follow the update log until completion.
-    
-    Args:
-        client: HacClient instance
-        json_output: Output as JSON
-        quiet: Plain text output
-    """
+    """Follow the update log until completion."""
     last_log = ""
-    poll_interval = 2  # seconds
-    max_wait = 3600  # 1 hour max
+    poll_interval = 2
+    max_wait = 3600
     start_time = time.time()
+    
+    console = _console()
     
     try:
         while True:
             log = client.get_update_log()
             current_log = log.log_text
             
-            # Only print new content
             if current_log != last_log:
                 if json_output:
-                    # For JSON, output the full log each time
                     print(json.dumps({
                         "log": current_log,
                         "is_complete": log.is_complete,
@@ -542,9 +523,7 @@ def _follow_log(client, json_output: bool, quiet: bool):
                         "timestamp": time.time()
                     }))
                 else:
-                    # Calculate new lines to print
                     if last_log:
-                        # Find where the new content starts
                         new_content = current_log[len(last_log):].strip()
                     else:
                         new_content = current_log
@@ -553,25 +532,22 @@ def _follow_log(client, json_output: bool, quiet: bool):
                         if quiet or not _is_tty():
                             print(new_content)
                         else:
-                            # Rich output
                             rich_text = _html_to_rich(new_content.replace('\n', '<br/>'))
                             console.print(rich_text, end="")
                 
                 last_log = current_log
             
-            # Check if complete
             if log.is_complete:
                 if not json_output and _is_tty() and not quiet:
                     console.print()
                     if log.has_errors:
-                        console.print("[bold red]✗ Update completed with errors[/bold red]")
+                        console.print("[bold red]Update completed with errors[/bold red]")
                     else:
-                        console.print("[bold green]✓ Update completed successfully[/bold green]")
+                        console.print("[bold green]Update completed successfully[/bold green]")
                 break
             
-            # Check timeout
             if time.time() - start_time > max_wait:
-                err_console.print("[yellow]Warning: Timeout waiting for update to complete[/yellow]")
+                _console(stderr=True).print("[yellow]Warning: Timeout waiting for update to complete[/yellow]")
                 break
             
             time.sleep(poll_interval)
@@ -579,4 +555,3 @@ def _follow_log(client, json_output: bool, quiet: bool):
     except KeyboardInterrupt:
         if not json_output:
             console.print("\n[yellow]Stopped following log (update may still be running)[/yellow]")
-

@@ -48,12 +48,23 @@ jobs:
             --noconfirm \
             --collect-submodules hac_client_cli \
             --collect-submodules hac_client_core \
-            --collect-submodules rich \
             --hidden-import hac_client_core \
             --hidden-import hac_client_core.client \
             --hidden-import hac_client_core.auth \
             --hidden-import hac_client_core.session \
             --hidden-import hac_client_core.models \
+            --collect-data rich \
+            --hidden-import rich._unicode_data \
+            --exclude-module unittest \
+            --exclude-module test \
+            --exclude-module tkinter \
+            --exclude-module _tkinter \
+            --exclude-module PIL \
+            --exclude-module numpy \
+            --exclude-module pydoc \
+            --exclude-module doctest \
+            --exclude-module xmlrpc \
+            --exclude-module multiprocessing \
             src/hac_client_cli/app.py
         shell: bash
 

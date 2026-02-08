@@ -11,13 +11,10 @@ import typer
 from pathlib import Path
 from typing import Optional
 
-from hac_client_cli.environment_manager import EnvironmentManager
 from hac_client_cli.commands_env import env_app
 from hac_client_cli.commands_endpoint import app as endpoint_app
 from hac_client_cli.commands_session import session_app
 from hac_client_cli.commands_update import update_app
-from hac_client_core.client import HacClient, HacClientError
-from hac_client_core.auth import BasicAuthHandler
 
 app = typer.Typer(
     help="SAP Commerce HAC client",
@@ -32,7 +29,7 @@ app.add_typer(session_app, name="session")
 app.add_typer(update_app, name="update")
 
 
-def create_client(environment: Optional[str] = None, endpoint: Optional[str] = None, quiet: bool = False) -> HacClient:
+def create_client(environment: Optional[str] = None, endpoint: Optional[str] = None, quiet: bool = False):
     """Create HAC client from configuration.
     
     Requires an active session. Use 'hac session start' to create one.
@@ -46,7 +43,11 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
         Configured HacClient instance
     """
     from hac_client_core.session import SessionManager
+    from hac_client_core.client import HacClient
+    from hac_client_core.auth import BasicAuthHandler
+    from hac_client_core.models import SessionInfo
     from hac_client_cli.config_loader import get_endpoint_config
+    from urllib.parse import urlparse
     
     # Get endpoint configuration
     env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
@@ -55,13 +56,10 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
     session_id = f"{env_name}/{endpoint_name}"
     
     # Check for existing session
-    # Note: We need to find a session for this endpoint, but we don't know the username yet
-    # Sessions are keyed by (base_url, username, environment), so we need to list all sessions
     session_manager = SessionManager()
     all_sessions = session_manager.list_sessions()
     
     # Find a session for this endpoint
-    # Normalize URLs for comparison (remove trailing slashes)
     config_url_normalized = ep_config.url.rstrip('/')
     session = None
     for s in all_sessions:
@@ -79,13 +77,12 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
         raise typer.Exit(1)
     
     # Create client with existing session (no auto-login)
-    # We need a dummy password since BasicAuthHandler requires it, but it won't be used
     auth = BasicAuthHandler(session.username, "dummy")
     
     client = HacClient(
         base_url=ep_config.url,
         auth_handler=auth,
-        environment=session_id,  # Use composite key
+        environment=session_id,
         timeout=ep_config.timeout,
         ignore_ssl=ep_config.ignore_ssl,
         session_persistence=True,
@@ -93,7 +90,6 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
     )
     
     # Manually set session info from loaded session
-    from hac_client_core.models import SessionInfo
     client.session_info = SessionInfo(
         session_id=session.session_id,
         csrf_token=session.csrf_token,
@@ -102,14 +98,11 @@ def create_client(environment: Optional[str] = None, endpoint: Optional[str] = N
     )
     
     # Also set cookies in the http_session so they're sent with requests
-    # Extract domain from base URL
-    from urllib.parse import urlparse
     parsed_url = urlparse(ep_config.url)
     domain = parsed_url.hostname
     
     client.http_session.cookies.set('JSESSIONID', session.session_id, domain=domain, path='/')
     if session.route_cookie:
-        # Extract value from "ROUTE=value" format
         route_value = session.route_cookie.split('=', 1)[1] if '=' in session.route_cookie else session.route_cookie
         client.http_session.cookies.set('ROUTE', route_value, domain=domain, path='/')
     
@@ -127,6 +120,8 @@ def groovy_command(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
 ):
     """Execute Groovy script in HAC."""
+    from hac_client_core.client import HacClientError
+
     try:
         # Read script from file if needed
         script_content = script
@@ -177,6 +172,8 @@ def flexsearch_command(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
 ):
     """Execute FlexibleSearch query in HAC."""
+    from hac_client_core.client import HacClientError
+
     try:
         client = create_client(environment, endpoint, quiet)
         result = client.execute_flexiblesearch(query, max_count=max_count, locale=locale)
@@ -225,6 +222,8 @@ def impex_command(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
 ):
     """Import Impex data in HAC."""
+    from hac_client_core.client import HacClientError
+
     try:
         if not file.exists():
             print(f"ERROR: Impex file not found: {file}", file=sys.stderr)
@@ -327,19 +326,15 @@ timeout = 120
         if validate:
             issues = []
             
-            # Check if config file exists
             if not config_path.exists():
                 issues.append("Configuration file does not exist")
             
-            # Check if we have environments
             if not config.environments:
                 issues.append("No environments configured")
             
-            # Check default environment exists
             if config.default_environment not in config.environments:
                 issues.append(f"Default environment '{config.default_environment}' not found in configured environments")
             
-            # Check each environment
             for name, env in config.environments.items():
                 if not env.password:
                     issues.append(f"Environment '{name}': password not configured (set in config or HAC_PASSWORD_{name.upper()} env var)")
@@ -350,14 +345,14 @@ timeout = 120
                 print(json.dumps({"valid": len(issues) == 0, "issues": issues}, indent=2))
             else:
                 if issues:
-                    print("❌ Configuration has issues:\n")
+                    print("Configuration has issues:\n")
                     for issue in issues:
                         print(f"  - {issue}")
                     print(f"\nConfiguration file: {config_path}")
                     print("Run 'hac config --example' to see example configuration")
                     raise typer.Exit(1)
                 else:
-                    print("✅ Configuration is valid")
+                    print("Configuration is valid")
                     print(f"  - {len(config.environments)} environment(s) configured")
                     print(f"  - Default: {config.default_environment}")
             return
@@ -389,7 +384,7 @@ timeout = 120
                 print(f"Environment: {environment}{marker}")
                 print(f"  URL: {env.url}")
                 print(f"  Username: {env.username}")
-                print(f"  Password: {'✓ configured' if env.password else '✗ NOT configured'}")
+                print(f"  Password: {'configured' if env.password else 'NOT configured'}")
                 print(f"  Ignore SSL: {env.ignore_ssl}")
                 print(f"  Timeout: {env.timeout}s")
             return
@@ -425,13 +420,13 @@ timeout = 120
             print(json.dumps(output, indent=2))
         else:
             print(f"Configuration file: {config_path}")
-            print(f"Status: {'✓ exists' if config_path.exists() else '✗ not found (using defaults)'}")
+            print(f"Status: {'exists' if config_path.exists() else 'not found (using defaults)'}")
             print(f"\nDefault environment: {config.default_environment}")
             print(f"\nEnvironments ({len(config.environments)}):")
             for name in sorted(config.environments.keys()):
                 env = config.environments[name]
-                marker = " ← default" if name == config.default_environment else ""
-                pwd_status = "✓" if env.password else "✗"
+                marker = " <- default" if name == config.default_environment else ""
+                pwd_status = "yes" if env.password else "no"
                 print(f"  {name}{marker}")
                 print(f"    URL: {env.url}")
                 print(f"    Username: {env.username}")
@@ -462,4 +457,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

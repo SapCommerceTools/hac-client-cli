@@ -40,7 +40,7 @@ sudo mv hac /usr/local/bin/
 Invoke-WebRequest -Uri "https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe" -OutFile "$env:LOCALAPPDATA\hac.exe"
 ```
 
-### pip
+### pip (requires Python 3.12+)
 
 ```bash
 pip install hac-client-cli

@@ -1,7 +1,6 @@
 # HAC Client CLI
 
 Command-line interface for the SAP Commerce HAC (Hybris Administration Console).
----
 
 ## Features
 

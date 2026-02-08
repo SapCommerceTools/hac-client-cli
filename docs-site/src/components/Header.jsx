@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SearchBox from './SearchBox'
 
 function Header() {
   return (
@@ -16,6 +17,7 @@ function Header() {
         </svg>
         <span className="header-title">HAC Client CLI</span>
       </Link>
+      <SearchBox />
       <span className="header-subtitle">Documentation</span>
     </header>
   )

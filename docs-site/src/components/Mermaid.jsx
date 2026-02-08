@@ -3,16 +3,20 @@ import mermaid from 'mermaid'
 
 mermaid.initialize({
   startOnLoad: false,
-  theme: 'dark',
+  theme: 'base',
   themeVariables: {
     darkMode: true,
-    background: '#1e1e2e',
-    primaryColor: '#89b4fa',
-    primaryTextColor: '#cdd6f4',
-    primaryBorderColor: '#585b70',
-    lineColor: '#a6adc8',
-    secondaryColor: '#f5c2e7',
-    tertiaryColor: '#a6e3a1',
+    background: 'transparent',
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontSize: '14px',
+    primaryColor: '#313244',
+    primaryTextColor: '#f5f5f5',
+    primaryBorderColor: '#6c7086',
+    lineColor: '#9399b2',
+    secondaryColor: '#45475a',
+    tertiaryColor: '#585b70',
+    edgeLabelBackground: '#1e1e2e',
+    nodeTextColor: '#f5f5f5',
   },
 })
 

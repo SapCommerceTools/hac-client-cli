@@ -1407,10 +1407,10 @@ graph TD
     OP -->|"SSH (personal key + 2FA)"| B
     B -->|"HTTPS (internal network only)"| C
 
-    style ADM fill:#e64553,stroke:#585b70,color:#fff
-    style OP fill:#45475a,stroke:#585b70,color:#cdd6f4
-    style B fill:#1e66f5,stroke:#585b70,color:#fff
-    style C fill:#40a02b,stroke:#585b70,color:#fff
+    style ADM fill:#dc626b,stroke:#f5a6ad,color:#fff
+    style OP fill:#7c88c7,stroke:#a6b1e1,color:#fff
+    style B fill:#3b82f6,stroke:#93bbfd,color:#fff
+    style C fill:#4ade80,stroke:#86efac,color:#1a1a2e
 \`\`\`
 
 ---

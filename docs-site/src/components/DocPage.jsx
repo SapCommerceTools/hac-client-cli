@@ -5,6 +5,14 @@ import rehypeHighlight from 'rehype-highlight'
 import { docsContent } from '../docs/index'
 import Mermaid from './Mermaid'
 
+function isMermaidChild(children) {
+  if (!children?.props) return false
+  const cls = children.props.className || ''
+  if (cls.includes('language-mermaid')) return true
+  if (children.type === Mermaid) return true
+  return false
+}
+
 function DocPage() {
   const { slug } = useParams()
   const content = docsContent[slug]
@@ -20,21 +28,18 @@ function DocPage() {
         rehypePlugins={[rehypeHighlight]}
         components={{
           code: ({ inline, className, children, ...props }) => {
-            const match = /language-mermaid/.exec(className || '')
-            if (!inline && match) {
+            if (!inline && /language-mermaid/.test(className || '')) {
               return <Mermaid chart={String(children).replace(/\n$/, '')} />
             }
             return <code className={className} {...props}>{children}</code>
           },
           pre: ({ children, ...props }) => {
-            // If child is a Mermaid diagram, don't wrap in <pre>
-            if (children?.props?.className === 'language-mermaid' ||
-                children?.type === Mermaid) {
+            if (isMermaidChild(children)) {
               return <>{children}</>
             }
             const codeElement = children?.props
             const className = codeElement?.className || ''
-            const language = className.replace('language-', '') || 'text'
+            const language = className.replace(/hljs\s*/g, '').replace('language-', '').trim() || 'text'
             return (
               <pre data-language={language} {...props}>
                 {children}
@@ -43,9 +48,9 @@ function DocPage() {
           },
           a: ({ href, children, ...props }) => {
             if (href?.startsWith('./') || href?.startsWith('../')) {
-              const slug = href.replace(/^\.\//, '').replace(/\.md$/, '')
+              const aSlug = href.replace(/^\.\//, '').replace(/\.md$/, '')
               return (
-                <a href={`/docs/${slug}`} {...props}>
+                <a href={`/docs/${aSlug}`} {...props}>
                   {children}
                 </a>
               )

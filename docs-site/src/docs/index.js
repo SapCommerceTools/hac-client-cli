@@ -1112,6 +1112,10 @@ An Agent Skill is a \`SKILL.md\` file — markdown with YAML frontmatter — tha
 
 ### SKILL.md
 
+The file has two parts: YAML frontmatter (metadata) and the markdown body (instructions).
+
+**Frontmatter** — loaded at startup (~100 tokens), tells the agent when to activate the skill:
+
 \`\`\`yaml
 ---
 name: hac-commerce
@@ -1122,64 +1126,36 @@ description: >
 ---
 \`\`\`
 
-\`\`\`markdown
-# SAP Commerce HAC Skill
+**Body** — loaded into context only when the skill is triggered. Contains step-by-step instructions the agent follows:
 
-You have access to the \\\`hac\\\` CLI for interacting with SAP Commerce HAC instances.
-
-## Prerequisites
-
-A session must be active before running commands. Check with:
-
-\\\`\\\`\\\`bash
-hac session list
-\\\`\\\`\\\`
-
-If no session exists, ask the user to authenticate first.
-
-## Available commands
-
-### FlexibleSearch — query data
-
-\\\`\\\`\\\`bash
-hac flexsearch "SELECT {pk}, {code}, {name[en]} FROM {Product}" --max-count 100 --json
-\\\`\\\`\\\`
-
-Always use \\\`--json\\\` for structured output and \\\`--max-count\\\` to limit results.
-
-### Groovy — execute scripts
-
-\\\`\\\`\\\`bash
-hac groovy "return flexibleSearchService.search('SELECT COUNT({pk}) FROM {Product}').result[0][0]" --json
-\\\`\\\`\\\`
-
-Default is rollback mode (read-only). Only use \\\`--commit\\\` when the user explicitly asks to modify data.
-
-### Impex — import data
-
-\\\`\\\`\\\`bash
-hac impex -f data.impex --json
-\\\`\\\`\\\`
-
-### System updates
-
-\\\`\\\`\\\`bash
-hac update data --json          # list extensions
-hac update patches --json       # list patches
-hac update run -p PatchName     # run a patch
-hac update log --follow         # follow update log
-\\\`\\\`\\\`
-
-## Rules
-
-1. Always use \\\`--json\\\` so you can parse the output
-2. Always use \\\`--max-count\\\` for FlexibleSearch to avoid overwhelming context
-3. Never use \\\`--commit\\\` on Groovy unless the user explicitly requests a write operation
-4. If a command fails with an auth error, tell the user to re-authenticate
-
-For common query patterns, see [QUERIES.md](QUERIES.md).
-For product diagnostics, run: \\\`bash scripts/diagnose-product.sh <product-code>\\\`
-\`\`\`
+> **# SAP Commerce HAC Skill**
+>
+> You have access to the \`hac\` CLI for interacting with SAP Commerce HAC instances.
+>
+> **## Prerequisites**
+>
+> A session must be active before running commands. Check with \`hac session list\`.
+> If no session exists, ask the user to authenticate first.
+>
+> **## Available commands**
+>
+> **FlexibleSearch:** \`hac flexsearch "SELECT ..." --max-count 100 --json\`
+>
+> **Groovy:** \`hac groovy "script" --json\` (default: rollback; use \`--commit\` only when explicitly requested)
+>
+> **Impex:** \`hac impex -f data.impex --json\`
+>
+> **Updates:** \`hac update data --json\`, \`hac update patches --json\`, \`hac update run -p PatchName\`
+>
+> **## Rules**
+>
+> 1. Always use \`--json\` so you can parse the output
+> 2. Always use \`--max-count\` for FlexibleSearch to avoid overwhelming context
+> 3. Never use \`--commit\` on Groovy unless the user explicitly requests a write
+> 4. If a command fails with an auth error, tell the user to re-authenticate
+>
+> For common queries, see QUERIES.md.
+> For diagnostics, run: \`bash scripts/diagnose-product.sh <product-code>\`
 
 The agent loads the YAML frontmatter at startup (~100 tokens). When a matching request arrives, it reads \`SKILL.md\` into context. Additional files like \`QUERIES.md\` and scripts are loaded only when referenced — progressive disclosure keeps the context window lean.
 

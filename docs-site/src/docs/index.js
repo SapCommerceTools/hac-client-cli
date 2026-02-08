@@ -1080,7 +1080,7 @@ hac session clear-all --force
 
   'use-case-agentic-coding': `# Agentic Coding
 
-The HAC CLI is a natural fit as an **agentic skill** — a tool that AI coding assistants (Copilot, Cursor, Aider, Claude Code, custom agents) can invoke to interact with a live SAP Commerce instance.
+The HAC CLI is a natural fit as an [Agent Skill](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) — a filesystem-based capability that AI coding assistants (Claude Code, Cursor, Aider, and other agents) can discover and invoke to interact with a live SAP Commerce instance.
 
 ---
 
@@ -1096,97 +1096,137 @@ The HAC CLI is a natural fit as an **agentic skill** — a tool that AI coding a
 
 ---
 
-## Example: agent skill definition
+## Agent Skill definition
 
-A typical tool definition an agent can use:
+An Agent Skill is a \`SKILL.md\` file — markdown with YAML frontmatter — that the agent discovers automatically and loads on demand. The agent reads the instructions, then runs the CLI commands via bash.
 
-\`\`\`json
-{
-  "name": "hac_flexsearch",
-  "description": "Run a FlexibleSearch query against SAP Commerce and return results as JSON",
-  "parameters": {
-    "query": { "type": "string", "description": "FlexibleSearch SQL query" },
-    "max_count": { "type": "integer", "default": 100 }
-  },
-  "command": "hac flexsearch \"{query}\" --max-count {max_count} --json"
-}
+### Directory structure
+
+\`\`\`
+.claude/skills/hac-commerce/
+├── SKILL.md              # Main instructions (loaded when triggered)
+├── QUERIES.md            # Common FlexibleSearch patterns
+└── scripts/
+    └── diagnose-product.sh  # Reusable diagnostic script
 \`\`\`
 
-\`\`\`json
-{
-  "name": "hac_groovy",
-  "description": "Execute a Groovy script on SAP Commerce HAC and return the result",
-  "parameters": {
-    "script": { "type": "string", "description": "Groovy script source code" },
-    "commit": { "type": "boolean", "default": false }
-  },
-  "command": "hac groovy \"{script}\" --json {commit ? '--commit' : ''}"
-}
+### SKILL.md
+
+\`\`\`yaml
+---
+name: hac-commerce
+description: >
+  Query and manage SAP Commerce instances via the hac CLI.
+  Use when the user asks about products, orders, catalog data,
+  Impex imports, Groovy scripts, or system updates on SAP Commerce / Hybris.
+---
 \`\`\`
+
+\`\`\`markdown
+# SAP Commerce HAC Skill
+
+You have access to the \\\`hac\\\` CLI for interacting with SAP Commerce HAC instances.
+
+## Prerequisites
+
+A session must be active before running commands. Check with:
+
+\\\`\\\`\\\`bash
+hac session list
+\\\`\\\`\\\`
+
+If no session exists, ask the user to authenticate first.
+
+## Available commands
+
+### FlexibleSearch — query data
+
+\\\`\\\`\\\`bash
+hac flexsearch "SELECT {pk}, {code}, {name[en]} FROM {Product}" --max-count 100 --json
+\\\`\\\`\\\`
+
+Always use \\\`--json\\\` for structured output and \\\`--max-count\\\` to limit results.
+
+### Groovy — execute scripts
+
+\\\`\\\`\\\`bash
+hac groovy "return flexibleSearchService.search('SELECT COUNT({pk}) FROM {Product}').result[0][0]" --json
+\\\`\\\`\\\`
+
+Default is rollback mode (read-only). Only use \\\`--commit\\\` when the user explicitly asks to modify data.
+
+### Impex — import data
+
+\\\`\\\`\\\`bash
+hac impex -f data.impex --json
+\\\`\\\`\\\`
+
+### System updates
+
+\\\`\\\`\\\`bash
+hac update data --json          # list extensions
+hac update patches --json       # list patches
+hac update run -p PatchName     # run a patch
+hac update log --follow         # follow update log
+\\\`\\\`\\\`
+
+## Rules
+
+1. Always use \\\`--json\\\` so you can parse the output
+2. Always use \\\`--max-count\\\` for FlexibleSearch to avoid overwhelming context
+3. Never use \\\`--commit\\\` on Groovy unless the user explicitly requests a write operation
+4. If a command fails with an auth error, tell the user to re-authenticate
+
+For common query patterns, see [QUERIES.md](QUERIES.md).
+For product diagnostics, run: \\\`bash scripts/diagnose-product.sh <product-code>\\\`
+\`\`\`
+
+The agent loads the YAML frontmatter at startup (~100 tokens). When a matching request arrives, it reads \`SKILL.md\` into context. Additional files like \`QUERIES.md\` and scripts are loaded only when referenced — progressive disclosure keeps the context window lean.
 
 ---
 
-## Agentic workflow example
+## How the agent uses it
 
 An agent investigating a failing order:
 
 \`\`\`
-Agent: "Order ORD-12345 failed. Let me check."
+User: "Order ORD-12345 failed. Find out why."
+
+Agent reads SKILL.md → knows hac CLI is available
 
 → hac flexsearch "SELECT {pk}, {status}, {date}, {totalPrice} FROM {Order} WHERE {code} = 'ORD-12345'" --json
 ← {"rows": [["8796093088769", "PAYMENT_FAILED", "2025-06-15", "149.99"]], ...}
 
-Agent: "Payment failed. Let me check payment transactions."
+Agent: "Payment failed. Checking payment transactions."
 
 → hac flexsearch "SELECT {pk}, {status}, {paymentProvider} FROM {PaymentTransaction} WHERE {order} = 8796093088769" --json
 ← {"rows": [["8796093088770", "REJECTED", "stripe"]], ...}
 
-Agent: "Stripe rejected. Let me check the Groovy logs."
+Agent: "Stripe rejected. Checking details via Groovy."
 
 → hac groovy "
-  import de.hybris.platform.payment.model.PaymentTransactionModel
-  def tx = flexibleSearchService.search('SELECT {pk} FROM {PaymentTransaction} WHERE {pk} = 8796093088770').result[0]
+  def tx = flexibleSearchService.search(
+    'SELECT {pk} FROM {PaymentTransaction} WHERE {pk} = 8796093088770'
+  ).result[0]
   return [status: tx.status, info: tx.requestId, reason: tx.statusInfo]
 " --json
 ← {"execution_result": "{status=REJECTED, info=pi_3N..., reason=card_declined}", ...}
 
-Agent: "Card was declined. The customer's card was rejected by Stripe with reason 'card_declined'."
+Agent: "The customer's card was declined by Stripe (reason: card_declined)."
 \`\`\`
+
+Each step is a bash command. The agent parses JSON output, reasons about the result, and decides the next query — no special SDK or protocol integration needed.
 
 ---
 
-## MCP server wrapper
-
-You can wrap the CLI as an [MCP](https://modelcontextprotocol.io/) tool server so any MCP-compatible agent can use it:
-
-\`\`\`python
-# Minimal MCP server exposing hac commands as tools
-import subprocess, json
-
-def hac_flexsearch(query: str, max_count: int = 100) -> dict:
-    result = subprocess.run(
-        ["hac", "flexsearch", query, "--max-count", str(max_count), "--json"],
-        capture_output=True, text=True
-    )
-    return json.loads(result.stdout)
-
-def hac_groovy(script: str, commit: bool = False) -> dict:
-    cmd = ["hac", "groovy", script, "--json"]
-    if commit:
-        cmd.append("--commit")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    return json.loads(result.stdout)
-\`\`\`
-
----
-
-## Best practices for agentic use
+## Best practices
 
 1. **Always use \`--json\`** — structured output is essential for parsing
 2. **Limit result sets** — use \`--max-count\` to avoid overwhelming the agent context
 3. **Pre-authenticate** — run \`hac session start\` once before the agent session
-4. **Use read-only by default** — only pass \`--commit\` to Groovy when the agent explicitly needs to write
-5. **Scope access** — use a dedicated user with minimal permissions for agent sessions
+4. **Read-only by default** — only pass \`--commit\` to Groovy when explicitly needed
+5. **Scope access** — use a dedicated HAC user with minimal permissions for agent sessions
+6. **Bundle diagnostic scripts** — put reusable scripts in the skill's \`scripts/\` directory so the agent runs them instead of generating code from scratch
 `,
 
   'use-case-diagnostics': `# Diagnostics Automation

@@ -273,7 +273,7 @@ def config_command(
         hac config -p               # Show config file path
         hac config -x               # Show example config
     """
-    from hac_client_cli.config_loader import get_config_path
+    from hac_client_cli.config_loader import get_config_path, load_config
     
     config_path = get_config_path()
     

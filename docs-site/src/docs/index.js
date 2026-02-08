@@ -36,10 +36,103 @@ export const docsSections = [
 export const docsContent = {
   'installation': `# Installation
 
-## Native Executable (recommended)
+## Choose your method
 
-**No Python required.** Download a single binary for your platform from the
-[latest GitHub release](https://github.com/SapCommerceTools/hac-client-cli/releases/latest).
+| Method | Startup | Requires Python | Isolation | Best for |
+|--------|---------|-----------------|-----------|----------|
+| **pipx** | **~100 ms** ⚡ | Yes (3.12+) | Full (auto-managed venv) | Daily use, best performance |
+| **Native binary** | ~290 ms | **No** | Full (self-contained) | Quick start, CI runners, no Python available |
+| **pip** | **~100 ms** ⚡ | Yes (3.12+) | Manual (use a venv) | Integrating into Python projects |
+
+> **TL;DR** — Have Python? Use **pipx** (3× faster startup). No Python? Grab the **native binary**.
+
+---
+
+## pipx — recommended for daily use
+
+pipx installs the CLI into an isolated virtual environment and wires the \`hac\` command into your PATH automatically. No manual venv, no conflicts, and the same ~100 ms startup as a regular pip install.
+
+### Linux
+
+\`\`\`bash
+# 1. Install pipx (if you don't have it)
+#    Debian / Ubuntu
+sudo apt install pipx
+pipx ensurepath
+
+#    Fedora
+sudo dnf install pipx
+pipx ensurepath
+
+# 2. Install hac
+pipx install hac-client-cli
+
+# 3. Verify
+hac --help
+\`\`\`
+
+### macOS
+
+\`\`\`bash
+# 1. Install pipx
+brew install pipx
+pipx ensurepath
+
+# 2. Install hac
+pipx install hac-client-cli
+
+# 3. Verify
+hac --help
+\`\`\`
+
+### Windows
+
+Most Windows machines don't ship Python. Here's the full path from scratch:
+
+**Using winget (Windows 10 1709+ / Windows 11):**
+
+\`\`\`powershell
+# 1. Install Python (if needed) — opens Microsoft Store or installs directly
+winget install Python.Python.3.12
+
+# 2. Restart your terminal so python/pip are on PATH
+
+# 3. Install pipx
+python -m pip install --user pipx
+python -m pipx ensurepath
+
+# 4. Restart your terminal again
+
+# 5. Install hac
+pipx install hac-client-cli
+
+# 6. Verify
+hac --help
+\`\`\`
+
+**Using Scoop:**
+
+\`\`\`powershell
+scoop install python
+python -m pip install --user pipx
+python -m pipx ensurepath
+# restart terminal
+pipx install hac-client-cli
+\`\`\`
+
+**Other methods:** If you don't have winget or Scoop, download the installer from [python.org](https://www.python.org/downloads/) (check "Add to PATH" during install), then follow steps 3–6 above. See the [pipx docs](https://pipx.pypa.io/stable/installation/) for more options.
+
+### Upgrading
+
+\`\`\`bash
+pipx upgrade hac-client-cli
+\`\`\`
+
+---
+
+## Native binary — zero dependencies
+
+A single self-contained executable. No Python, no pip, no venv — download and run. Startup is ~290 ms (vs ~100 ms for pipx) because the binary unpacks a bundled Python runtime on each launch.
 
 | Platform | Download |
 |----------|----------|
@@ -48,96 +141,54 @@ export const docsContent = {
 | macOS Intel | [\`hac-macos-x86_64\`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-macos-x86_64) |
 | Windows x86_64 | [\`hac-windows-x86_64.exe\`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe) |
 
----
-
 ### Linux
 
 \`\`\`bash
-# Download
 curl -Lo hac https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-linux-x86_64
-
-# Make executable
 chmod +x hac
-
-# Move to PATH
 sudo mv hac /usr/local/bin/
-
-# Verify
 hac --help
 \`\`\`
 
-### macOS (Apple Silicon)
+### macOS
 
 \`\`\`bash
-# Download
+# Apple Silicon
 curl -Lo hac https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-macos-arm64
 
-# Remove quarantine
+# Intel — use hac-macos-x86_64 instead
+
 xattr -d com.apple.quarantine hac 2>/dev/null
-
-# Make executable
 chmod +x hac
-
-# Move to PATH
 sudo mv hac /usr/local/bin/
-
-# Verify
-hac --help
-\`\`\`
-
-### macOS (Intel)
-
-\`\`\`bash
-# Download
-curl -Lo hac https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-macos-x86_64
-
-# Remove quarantine
-xattr -d com.apple.quarantine hac 2>/dev/null
-
-# Make executable
-chmod +x hac
-
-# Move to PATH
-sudo mv hac /usr/local/bin/
-
-# Verify
 hac --help
 \`\`\`
 
 ### Windows
 
-1. Download [\`hac-windows-x86_64.exe\`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe)
-2. Rename to \`hac.exe\` (optional)
-3. Move to a directory on your \`PATH\`, or add the download directory to \`PATH\`
-4. Open a terminal and run:
-
 \`\`\`powershell
+Invoke-WebRequest -Uri "https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe" -OutFile "$env:LOCALAPPDATA\hac.exe"
+# Add %LOCALAPPDATA% to PATH if not already there, then:
 hac --help
 \`\`\`
 
-**PowerShell one-liner:**
+### Upgrading
 
-\`\`\`powershell
-Invoke-WebRequest -Uri "https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe" -OutFile "$env:LOCALAPPDATA\\hac.exe"
-\`\`\`
+Download the new binary and replace the old one. There is no auto-update mechanism.
 
 ---
 
-## Install via pipx (recommended if you have Python)
+## pip
 
-[pipx](https://pipx.pypa.io/) installs in an isolated environment and manages PATH automatically — no virtualenv needed:
-
-\`\`\`bash
-pipx install hac-client-cli
-\`\`\`
-
-## Install via pip
+If you manage your own virtual environments:
 
 \`\`\`bash
 pip install hac-client-cli
 \`\`\`
 
-## Install from source
+---
+
+## From source
 
 \`\`\`bash
 git clone https://github.com/SapCommerceTools/hac-client-cli.git

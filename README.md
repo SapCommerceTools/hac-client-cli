@@ -15,9 +15,25 @@ Command-line interface for the SAP Commerce HAC (Hybris Administration Console).
 
 ## Installation
 
-### Native executable (recommended)
+| Method | Startup | Requires Python | Best for |
+|--------|---------|-----------------|----------|
+| **pipx** | **~100 ms** ⚡ | Yes (3.12+) | Daily use, best performance |
+| **Native binary** | ~290 ms | **No** | Quick start, CI, no Python available |
+| **pip** | **~100 ms** ⚡ | Yes (3.12+) | Integrating into Python projects |
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/SapCommerceTools/hac-client-cli/releases/latest).
+### pipx — recommended for daily use
+
+Installs in an isolated environment, manages PATH automatically, ~100 ms startup:
+
+```bash
+pipx install hac-client-cli
+```
+
+> Don't have pipx? See the [full installation guide](https://sapcommercetools.github.io/hac-client-cli/docs/installation) for step-by-step setup on Linux, macOS, and Windows.
+
+### Native binary — zero dependencies
+
+No Python required. Download → run. Startup is ~290 ms (the binary unpacks a bundled Python runtime on each launch).
 
 | Platform | Download |
 |----------|----------|
@@ -26,26 +42,11 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | macOS Intel | [`hac-macos-x86_64`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-macos-x86_64) |
 | Windows x86_64 | [`hac-windows-x86_64.exe`](https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe) |
 
-**Linux / macOS:**
-
 ```bash
+# Linux / macOS
 curl -Lo hac https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-linux-x86_64
 chmod +x hac
 sudo mv hac /usr/local/bin/
-```
-
-**Windows (PowerShell):**
-
-```powershell
-Invoke-WebRequest -Uri "https://github.com/SapCommerceTools/hac-client-cli/releases/latest/download/hac-windows-x86_64.exe" -OutFile "$env:LOCALAPPDATA\hac.exe"
-```
-
-### pipx (requires Python 3.12+)
-
-Installs in an isolated environment, no virtualenv needed:
-
-```bash
-pipx install hac-client-cli
 ```
 
 ### pip

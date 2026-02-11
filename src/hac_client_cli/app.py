@@ -235,7 +235,11 @@ def impex_command(
         result = client.import_impex(impex_content, validation_mode=validation)
         
         if not result.success:
-            print(f"ERROR: Impex import failed\n{result.error}", file=sys.stderr)
+            lines = [f"ERROR: Impex import failed: {result.error}"]
+            if result.validation_errors:
+                for ve in result.validation_errors:
+                    lines.append(f"  {ve}")
+            print("\n".join(lines), file=sys.stderr)
             raise typer.Exit(1)
         
         if json_output:

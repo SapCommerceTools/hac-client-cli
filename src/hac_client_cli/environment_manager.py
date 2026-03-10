@@ -324,6 +324,21 @@ class EnvironmentManager:
         Raises:
             ValueError: If environment doesn't exist or endpoint already exists
         """
+        # Validate arguments to catch common mistakes
+        if "://" in endpoint_name:
+            raise ValueError(
+                f"Endpoint name cannot be a URL: '{endpoint_name}'\n"
+                f"Did you mean: hac endpoint add {env_name} <name> --url \"{endpoint_name}\"?\n"
+                f"Note: endpoint name comes BEFORE --url option"
+            )
+        
+        if "://" not in url:
+            raise ValueError(
+                f"URL must be a valid URL (should contain '://'): '{url}'\n"
+                f"Did you swap the endpoint name and URL?\n"
+                f"Expected: hac endpoint add {env_name} {url} --url <actual-url>"
+            )
+        
         config = self._load_config()
         
         if env_name not in config.get("environments", {}):
@@ -369,6 +384,12 @@ class EnvironmentManager:
         Raises:
             ValueError: If environment or endpoint doesn't exist
         """
+        # Validate URL if provided
+        if url is not None and "://" not in url:
+            raise ValueError(
+                f"URL must be a valid URL (should contain '://'): '{url}'"
+            )
+        
         config = self._load_config()
         
         if env_name not in config.get("environments", {}):

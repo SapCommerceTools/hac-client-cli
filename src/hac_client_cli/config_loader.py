@@ -68,7 +68,6 @@ def load_config() -> HacClientConfig:
                     endpoints={
                         "hac": EndpointConfig(
                             url="https://localhost:9002",
-                            username="admin",
                             ignore_ssl=True
                         )
                     },

@@ -117,7 +117,6 @@ def show_environment(
                 "endpoints": {
                     ep_name: {
                         "url": ep.url,
-                        "username": ep.username,
                         "ignore_ssl": ep.ignore_ssl,
                         "timeout": ep.timeout
                     }

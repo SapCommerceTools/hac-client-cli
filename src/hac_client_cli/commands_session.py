@@ -306,25 +306,23 @@ def list_sessions(
 @session_app.command("show")
 def show_session(
     environment: str = typer.Argument(..., help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name (uses default if not specified)"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")
 ):
     """Show details of a specific session."""
     try:
-        from hac_client_cli.environment_manager import EnvironmentManager
+        from hac_client_cli.config_loader import get_endpoint_config
         from hac_client_core.session import SessionManager
 
-        env_manager = EnvironmentManager()
-        env = env_manager.get_environment(environment)
-        
-        if not env:
-            print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
-            raise typer.Exit(1)
-        
+        env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
+        session_id = f"{env_name}/{endpoint_name}"
+
         session_manager = SessionManager()
-        session = session_manager.load_session(env.url, env.username, environment)
+        sessions = session_manager.list_sessions()
+        session = next((s for s in sessions if s.environment == session_id), None)
         
         if not session:
-            print(f"No active session for environment '{environment}'")
+            print(f"No active session for environment '{session_id}'")
             return
         
         if json_output:
@@ -367,24 +365,28 @@ def show_session(
 
 @session_app.command("clear")
 def clear_session(
-    environment: str = typer.Argument(..., help="Environment name")
+    environment: str = typer.Argument(..., help="Environment name"),
+    endpoint: Optional[str] = typer.Option(None, "--endpoint", "-n", help="Endpoint name (uses default if not specified)")
 ):
     """Clear session for a specific environment."""
     try:
-        from hac_client_cli.environment_manager import EnvironmentManager
+        from hac_client_cli.config_loader import get_endpoint_config
         from hac_client_core.session import SessionManager
 
-        env_manager = EnvironmentManager()
-        env = env_manager.get_environment(environment)
-        
-        if not env:
-            print(f"ERROR: Environment '{environment}' not found", file=sys.stderr)
-            raise typer.Exit(1)
-        
+        env_name, endpoint_name, ep_config = get_endpoint_config(environment, endpoint)
+        session_id = f"{env_name}/{endpoint_name}"
+
         session_manager = SessionManager()
-        session_manager.remove_session(env.url, env.username, environment)
-        
-        print(f"Session cleared for environment '{environment}'")
+        sessions = session_manager.list_sessions()
+        session = next((s for s in sessions if s.environment == session_id), None)
+
+        if not session:
+            print(f"No active session for environment '{session_id}'")
+            return
+
+        session_manager.remove_session(session.base_url, session.username, session_id)
+
+        print(f"Session cleared for environment '{session_id}'")
     
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

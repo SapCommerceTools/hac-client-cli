@@ -327,6 +327,7 @@ def run_update(
     create_essential_data: bool = typer.Option(False, "--create-essential-data", help="Create essential data"),
     create_project_data: bool = typer.Option(False, "--create-project-data", help="Create project data"),
     localize_types: bool = typer.Option(False, "--localize-types", help="Localize types"),
+    schema_update: bool = typer.Option(False, "--schema-update", help="Run type-system schema update (DDL). Off by default."),
     follow: bool = typer.Option(True, "--follow/--no-follow", "-f", help="Follow update log"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress informational messages")
@@ -341,6 +342,7 @@ def run_update(
         hac update run -x myext -p MyPatch              # Specify extension
         hac update run --create-essential-data          # Create essential data
         hac update run --param cchpatches_Patch_MVP=yes # Set parameter directly
+        hac update run --schema-update                  # Run type-system schema update (DDL)
         hac update run --no-follow                      # Start update without following log
     """
     try:
@@ -410,7 +412,8 @@ def run_update(
             clear_hmc=clear_hmc,
             create_essential_data=create_essential_data,
             create_project_data=create_project_data,
-            localize_types=localize_types
+            localize_types=localize_types,
+            run_schema_update=schema_update
         )
         
         if not result.success:
